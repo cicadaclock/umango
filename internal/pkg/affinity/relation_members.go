@@ -16,18 +16,18 @@ func RelationIds(uma structs.Uma) []int {
 	return relationIds
 }
 
-// Returns overlapping relation IDs for two ID lists
-func MatchRelationIds(relationId_a, relationId_b []int) []int {
+func MatchRelationIds(relationIdsArgs ...[]int) []int {
 	match := make(map[int]int)
-	for _, relationId := range relationId_a {
-		match[relationId] += 1
-	}
-	for _, relationId := range relationId_b {
-		match[relationId] += 2
+	matchNum := (1 << len(relationIdsArgs)) - 1
+
+	for i, relationIds := range relationIdsArgs {
+		for _, relationId := range relationIds {
+			match[relationId] += 1 << i
+		}
 	}
 	relationIds := make([]int, 0, len(match))
 	for relationId, val := range match {
-		if val == 3 {
+		if val == matchNum {
 			relationIds = append(relationIds, relationId)
 		}
 	}
