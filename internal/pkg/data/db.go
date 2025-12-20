@@ -12,6 +12,7 @@ import (
 const (
 	// text_data categories
 	textDataCardId      = 4
+	textDataCharaName   = 6
 	textDataSkillSparks = 147
 )
 
@@ -77,6 +78,7 @@ func (db DB) SuccessionRelations() (map[int]int, error) {
 
 // Map chara_id to []relation_type from succession_relation_member
 func (db DB) SuccessionRelationMembers() (map[int][]int, error) {
+	// Get unique chara_ids
 	charaIds := make([]int, 0, 200)
 	rows, err := db.SqlDB.Query("SELECT t.chara_id FROM succession_relation_member AS t GROUP BY t.chara_id")
 	if err != nil {
@@ -92,22 +94,24 @@ func (db DB) SuccessionRelationMembers() (map[int][]int, error) {
 		charaIds = append(charaIds, chara_id)
 	}
 
+	// Get array of relation_type for each chara_id
 	result := make(map[int][]int, len(charaIds))
 	query, err := db.SqlDB.Prepare("SELECT t.relation_type FROM succession_relation_member AS t WHERE t.chara_id = ?")
 	if err != nil {
 		return nil, fmt.Errorf("prepare succession_relation_member query: %w", err)
 	}
 	defer query.Close()
-	for id := range charaIds {
-		rows, err := query.Query(id)
+	for _, id := range charaIds {
+		rows2, err := query.Query(id)
+		// rows2, err := db.SqlDB.Query("SELECT t.relation_type FROM succession_relation_member AS t WHERE t.chara_id = 1001")
 		if err != nil {
 			return nil, fmt.Errorf("query succession_relation_member rows where chara_id = %d: %w", id, err)
 		}
-		defer rows.Close()
+		defer rows2.Close()
 		var relation_type int
 		relationTypeList := make([]int, 0, 200)
-		for rows.Next() {
-			err := rows.Scan(&relation_type)
+		for rows2.Next() {
+			err := rows2.Scan(&relation_type)
 			if err != nil {
 				return nil, fmt.Errorf("scanning rows, %w", err)
 			}
@@ -156,6 +160,15 @@ func (db DB) TextDataSkillSpark() (map[int]string, error) {
 	a, err := db.textData(textDataSkillSparks, 0, 0, false)
 	if err != nil {
 		return nil, fmt.Errorf("get skill sparks from db: %w", err)
+	}
+	return a, nil
+}
+
+// Map chara_id to text from text_data
+func (db DB) TextDataCharaName() (map[int]string, error) {
+	a, err := db.textData(textDataCharaName, 0, 0, false)
+	if err != nil {
+		return nil, fmt.Errorf("get chara id from db: %w", err)
 	}
 	return a, nil
 }

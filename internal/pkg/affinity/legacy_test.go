@@ -3,132 +3,103 @@ package affinity
 import (
 	"testing"
 
-	"github.com/cicadaclock/umango/internal/pkg/structs"
+	"github.com/cicadaclock/umango/internal/pkg/data"
 )
 
 func TestLegacyAffinityForFullLegacy(t *testing.T) {
-	uma_1 := structs.Uma{
-		Id:   1001,
-		Name: "Special Week",
-	}
-	uma_2 := structs.Uma{
-		Id:   1002,
-		Name: "Silence Suzuka",
-	}
-	uma_3 := structs.Uma{
-		Id:   1003,
-		Name: "Tokai Teio",
-	}
-	uma_4 := structs.Uma{
-		Id:   1003,
-		Name: "Tokai Teio",
-	}
-	uma_5 := structs.Uma{
-		Id:   1005,
-		Name: "Fuji Kiseki",
-	}
-	uma_6 := structs.Uma{
-		Id:   1008,
-		Name: "Vodka",
-	}
-	uma_7 := structs.Uma{
-		Id:   1015,
-		Name: "TM Opera O",
+	var db data.DB
+	db.Open()
+	defer db.SqlDB.Close()
+	dataStore, err := data.New(db)
+	if err != nil {
+		t.Errorf("error loading data store: %v", err)
 	}
 
 	legacy := Legacy{
-		Trainee:    uma_1,
-		Parent_1:   uma_2,
-		Parent_2:   uma_3,
-		Parent_1_1: uma_4,
-		Parent_1_2: uma_5,
-		Parent_2_1: uma_6,
-		Parent_2_2: uma_7,
+		CharaId00: 1001,
+		CharaId10: 1002,
+		CharaId20: 1003,
+		CharaId11: 1003,
+		CharaId12: 1005,
+		CharaId21: 1008,
+		CharaId22: 1015,
 	}
-
-	affinity := legacy.Affinity()
+	affinity := legacy.Affinity(dataStore)
 	if affinity != 125 {
 		t.Errorf("Legacy %v == %d", legacy, affinity)
 	}
 }
 
 func TestLegacyAffinityForPartialLegacy(t *testing.T) {
-	uma_1 := structs.Uma{
-		Id:   1001,
-		Name: "Special Week",
-	}
-	uma_2 := structs.Uma{
-		Id:   1002,
-		Name: "Silence Suzuka",
-	}
-	uma_3 := structs.Uma{
-		Id:   1003,
-		Name: "Tokai Teio",
-	}
-	uma_4 := structs.Uma{
-		Id:   1003,
-		Name: "Tokai Teio",
-	}
-	uma_5 := structs.Uma{
-		Id:   1005,
-		Name: "Fuji Kiseki",
+	var db data.DB
+	db.Open()
+	defer db.SqlDB.Close()
+	dataStore, err := data.New(db)
+	if err != nil {
+		t.Errorf("error loading data store: %v", err)
 	}
 
 	legacy := Legacy{
-		Trainee:    uma_1,
-		Parent_1:   uma_2,
-		Parent_2:   uma_3,
-		Parent_1_1: uma_4,
-		Parent_1_2: uma_5,
+		CharaId00: 1001,
+		CharaId10: 1002,
+		CharaId20: 1003,
+		CharaId11: 1003,
+		CharaId12: 1005,
 	}
-
-	affinity := legacy.Affinity()
+	affinity := legacy.Affinity(dataStore)
 	if affinity != 89 {
 		t.Errorf("Legacy %v == %d", legacy, affinity)
 	}
 }
 
 func TestLegacyAffinityForEmptyLegacy(t *testing.T) {
-	legacy := Legacy{}
+	var db data.DB
+	db.Open()
+	defer db.SqlDB.Close()
+	dataStore, err := data.New(db)
+	if err != nil {
+		t.Errorf("error loading data store: %v", err)
+	}
 
-	affinity := legacy.Affinity()
+	legacy := Legacy{}
+	affinity := legacy.Affinity(dataStore)
 	if affinity != 0 {
 		t.Errorf("Legacy %v == %d", legacy, affinity)
 	}
 }
 
 func TestLegacyAffinityForSameUmaInParent(t *testing.T) {
-	uma_1 := structs.Uma{
-		Id:   1001,
-		Name: "Special Week",
-	}
-	uma_2 := structs.Uma{
-		Id:   1001,
-		Name: "Special Week",
+	var db data.DB
+	db.Open()
+	defer db.SqlDB.Close()
+	dataStore, err := data.New(db)
+	if err != nil {
+		t.Errorf("error loading data store: %v", err)
 	}
 
 	legacy := Legacy{
-		Trainee:  uma_1,
-		Parent_1: uma_2,
+		CharaId00: 1001,
+		CharaId10: 1001,
 	}
-
-	affinity := legacy.Affinity()
+	affinity := legacy.Affinity(dataStore)
 	if affinity != 0 {
 		t.Errorf("Legacy %v == %d", legacy, affinity)
 	}
 }
 
 func TestLegacyAffinityForEmptyParent(t *testing.T) {
-	uma_1 := structs.Uma{
-		Id:   1001,
-		Name: "Special Week",
+	var db data.DB
+	db.Open()
+	defer db.SqlDB.Close()
+	dataStore, err := data.New(db)
+	if err != nil {
+		t.Errorf("error loading data store: %v", err)
 	}
 
 	legacy := Legacy{
-		Trainee: uma_1,
+		CharaId00: 1001,
 	}
-
-	affinity := legacy.Affinity()
+	affinity := legacy.Affinity(dataStore)
 	if affinity != 0 {
 		t.Errorf("Legacy %v == %d", legacy, affinity)
 	}
