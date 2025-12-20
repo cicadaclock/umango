@@ -11,13 +11,7 @@ import (
 )
 
 func main() {
-
-	db, err := data.Open()
-	if err != nil {
-		log.Fatalf("error opening db: %v", err)
-	}
-	defer db.SqlDB.Close()
-	dataStore, err := data.Load(db)
+	dataStore, err := data.Init()
 	if err != nil {
 		log.Fatalf("error loading data store: %v", err)
 	}

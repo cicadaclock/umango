@@ -1,6 +1,6 @@
 //go:build windows
 
-package data
+package db
 
 import (
 	"os"

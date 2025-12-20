@@ -1,6 +1,6 @@
 // Interface for querying master.mdb directly
 
-package data
+package db
 
 import (
 	"database/sql"
@@ -29,7 +29,7 @@ func Open() (*DB, error) {
 	}
 	sqlDb, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
-		return nil, fmt.Errorf("opening db at %s: %w", dbPath, err)
+		return nil, fmt.Errorf("opening master.mdb at %s: %w", dbPath, err)
 	}
 	db.SqlDB = sqlDb
 	return &db, nil
