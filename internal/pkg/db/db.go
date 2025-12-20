@@ -48,7 +48,7 @@ func (db *DB) CardData() (map[int]int, error) {
 	for rows.Next() {
 		err := rows.Scan(&id, &chara_id)
 		if err != nil {
-			return nil, fmt.Errorf("scanning rows, %w", err)
+			return nil, fmt.Errorf("scanning card_data rows, %w", err)
 		}
 		result[id] = chara_id
 	}
@@ -68,7 +68,7 @@ func (db *DB) SuccessionRelations() (map[int]int, error) {
 	for rows.Next() {
 		err := rows.Scan(&relation_type, &relation_point)
 		if err != nil {
-			return nil, fmt.Errorf("scanning rows, %w", err)
+			return nil, fmt.Errorf("scanning succession_relation rows, %w", err)
 		}
 		result[relation_type] = relation_point
 	}
@@ -88,7 +88,7 @@ func (db *DB) SuccessionRelationMembers() (map[int][]int, error) {
 	for rows.Next() {
 		err := rows.Scan(&chara_id)
 		if err != nil {
-			return nil, fmt.Errorf("scanning rows, %w", err)
+			return nil, fmt.Errorf("scanning succession_relation_member rows, %w", err)
 		}
 		charaIds = append(charaIds, chara_id)
 	}
@@ -112,7 +112,7 @@ func (db *DB) SuccessionRelationMembers() (map[int][]int, error) {
 		for rows2.Next() {
 			err := rows2.Scan(&relation_type)
 			if err != nil {
-				return nil, fmt.Errorf("scanning rows, %w", err)
+				return nil, fmt.Errorf("scanning succession_relation_member rows, %w", err)
 			}
 			relationTypeList = append(relationTypeList, relation_type)
 		}
@@ -147,7 +147,7 @@ func (db *DB) textData(category, minIndex, maxIndex int, between bool) (map[int]
 	for rows.Next() {
 		err := rows.Scan(&index, &text)
 		if err != nil {
-			return nil, fmt.Errorf("scanning rows, %w", err)
+			return nil, fmt.Errorf("scanning text_data rows, %w", err)
 		}
 		result[index] = text
 	}
