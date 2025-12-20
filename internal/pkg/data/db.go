@@ -11,9 +11,9 @@ import (
 
 const (
 	// text_data categories
-	textDataCardId      = 4
-	textDataCharaName   = 6
-	textDataSkillSparks = 147
+	textDataCardId    = 4
+	textDataCharaName = 6
+	textDataFactors   = 147
 )
 
 type DB struct {
@@ -156,10 +156,10 @@ func (db DB) textData(category, minIndex, maxIndex int, between bool) (map[int]s
 }
 
 // Map skill_id to text from text_data
-func (db DB) TextDataSkillSpark() (map[int]string, error) {
-	a, err := db.textData(textDataSkillSparks, 0, 0, false)
+func (db DB) TextDataFactors() (map[int]string, error) {
+	a, err := db.textData(textDataFactors, 0, 0, false)
 	if err != nil {
-		return nil, fmt.Errorf("get skill sparks from db: %w", err)
+		return nil, fmt.Errorf("get factors (skill sparks) from db: %w", err)
 	}
 	return a, nil
 }

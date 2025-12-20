@@ -19,7 +19,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("error loading data store: %v", err)
 	}
-	fmt.Println((*dataStore).SkillSparkNames[10680103])
+	fmt.Println((*dataStore).FactorNames[10680103])
 
 	a := app.New()
 	w := a.NewWindow("Hello")
