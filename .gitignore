@@ -1,2 +1,5 @@
 .vscode
 *.exe
+*.mdb
+*.db
+**/meta
