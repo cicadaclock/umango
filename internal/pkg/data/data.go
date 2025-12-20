@@ -16,7 +16,7 @@ type DataStore struct {
 }
 
 // Load DB tables into memory
-func Load(db DB) (*DataStore, error) {
+func Load(db *DB) (*DataStore, error) {
 	dataStore := DataStore{}
 	var err error
 	dataStore.CardData, err = db.CardData()
