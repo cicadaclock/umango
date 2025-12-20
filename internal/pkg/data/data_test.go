@@ -6,8 +6,10 @@ import (
 )
 
 func TestFactorNames(t *testing.T) {
-	var db DB
-	db.Open()
+	db, err := Open()
+	if err != nil {
+		t.Errorf("error opening db: %v", err)
+	}
 	defer db.SqlDB.Close()
 	dataStore, err := Load(db)
 	if err != nil {

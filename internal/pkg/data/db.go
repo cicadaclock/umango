@@ -20,24 +20,23 @@ type DB struct {
 	SqlDB *sql.DB
 }
 
-// Open master.mdb
-func (db *DB) Open() error {
+// Create DB struct with connection to master.mdb
+func Open() (*DB, error) {
+	db := DB{}
 	dbPath, err := DBPath()
 	if err != nil {
-		return fmt.Errorf("getting master.mdb path: %w", err)
+		return nil, fmt.Errorf("getting master.mdb path: %w", err)
 	}
-
 	sqlDb, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
-		return fmt.Errorf("opening db at %s: %w", dbPath, err)
+		return nil, fmt.Errorf("opening db at %s: %w", dbPath, err)
 	}
-
 	db.SqlDB = sqlDb
-	return nil
+	return &db, nil
 }
 
 // Map id to chara_id from card_data
-func (db DB) CardData() (map[int]int, error) {
+func (db *DB) CardData() (map[int]int, error) {
 	result := make(map[int]int, 100)
 	rows, err := db.SqlDB.Query("SELECT t.id, t.chara_id FROM card_data AS t")
 	if err != nil {
@@ -57,7 +56,7 @@ func (db DB) CardData() (map[int]int, error) {
 }
 
 // Map relation_type to relation_point from succession_relation
-func (db DB) SuccessionRelations() (map[int]int, error) {
+func (db *DB) SuccessionRelations() (map[int]int, error) {
 	result := make(map[int]int, 1000)
 	rows, err := db.SqlDB.Query("SELECT t.relation_type, t.relation_point FROM succession_relation AS t")
 	if err != nil {
@@ -77,7 +76,7 @@ func (db DB) SuccessionRelations() (map[int]int, error) {
 }
 
 // Map chara_id to []relation_type from succession_relation_member
-func (db DB) SuccessionRelationMembers() (map[int][]int, error) {
+func (db *DB) SuccessionRelationMembers() (map[int][]int, error) {
 	// Get unique chara_ids
 	charaIds := make([]int, 0, 200)
 	rows, err := db.SqlDB.Query("SELECT t.chara_id FROM succession_relation_member AS t GROUP BY t.chara_id")
@@ -123,7 +122,7 @@ func (db DB) SuccessionRelationMembers() (map[int][]int, error) {
 }
 
 // Map index to text from text_data
-func (db DB) textData(category, minIndex, maxIndex int, between bool) (map[int]string, error) {
+func (db *DB) textData(category, minIndex, maxIndex int, between bool) (map[int]string, error) {
 	if minIndex > maxIndex {
 		return nil, fmt.Errorf("minimum index larger than max index")
 	}
@@ -156,7 +155,7 @@ func (db DB) textData(category, minIndex, maxIndex int, between bool) (map[int]s
 }
 
 // Map skill_id to text from text_data
-func (db DB) TextDataFactors() (map[int]string, error) {
+func (db *DB) TextDataFactors() (map[int]string, error) {
 	a, err := db.textData(textDataFactors, 0, 0, false)
 	if err != nil {
 		return nil, fmt.Errorf("get factors (skill sparks) from db: %w", err)
@@ -165,7 +164,7 @@ func (db DB) TextDataFactors() (map[int]string, error) {
 }
 
 // Map chara_id to text from text_data
-func (db DB) TextDataCharaName() (map[int]string, error) {
+func (db *DB) TextDataCharaName() (map[int]string, error) {
 	a, err := db.textData(textDataCharaName, 0, 0, false)
 	if err != nil {
 		return nil, fmt.Errorf("get chara id from db: %w", err)
@@ -174,7 +173,7 @@ func (db DB) TextDataCharaName() (map[int]string, error) {
 }
 
 // Map card_id to text from text_data
-func (db DB) TextDataVeteranCardId() (map[int]string, error) {
+func (db *DB) TextDataVeteranCardId() (map[int]string, error) {
 	a, err := db.textData(textDataCardId, 0, 0, false)
 	if err != nil {
 		return nil, fmt.Errorf("get card id from db: %w", err)
