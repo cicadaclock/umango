@@ -6,16 +6,16 @@ import (
 	"github.com/cicadaclock/umango/internal/pkg/data"
 )
 
+func setup(t *testing.T) *data.DataStore {
+	dataStore, err := data.Init()
+	if err != nil {
+		t.Errorf("init dataStore: %v", err)
+	}
+	return dataStore
+}
+
 func TestLegacyAffinityForFullLegacy(t *testing.T) {
-	db, err := data.Open()
-	if err != nil {
-		t.Errorf("error opening db: %v", err)
-	}
-	defer db.SqlDB.Close()
-	dataStore, err := data.Load(db)
-	if err != nil {
-		t.Errorf("error loading data store: %v", err)
-	}
+	dataStore := setup(t)
 
 	legacy := Legacy{
 		CharaId00: 1001,
@@ -33,15 +33,7 @@ func TestLegacyAffinityForFullLegacy(t *testing.T) {
 }
 
 func TestLegacyAffinityForPartialLegacy(t *testing.T) {
-	db, err := data.Open()
-	if err != nil {
-		t.Errorf("error opening db: %v", err)
-	}
-	defer db.SqlDB.Close()
-	dataStore, err := data.Load(db)
-	if err != nil {
-		t.Errorf("error loading data store: %v", err)
-	}
+	dataStore := setup(t)
 
 	legacy := Legacy{
 		CharaId00: 1001,
@@ -57,15 +49,7 @@ func TestLegacyAffinityForPartialLegacy(t *testing.T) {
 }
 
 func TestLegacyAffinityForEmptyLegacy(t *testing.T) {
-	db, err := data.Open()
-	if err != nil {
-		t.Errorf("error opening db: %v", err)
-	}
-	defer db.SqlDB.Close()
-	dataStore, err := data.Load(db)
-	if err != nil {
-		t.Errorf("error loading data store: %v", err)
-	}
+	dataStore := setup(t)
 
 	legacy := Legacy{}
 	affinity := legacy.Affinity(dataStore)
@@ -75,15 +59,7 @@ func TestLegacyAffinityForEmptyLegacy(t *testing.T) {
 }
 
 func TestLegacyAffinityForSameUmaInParent(t *testing.T) {
-	db, err := data.Open()
-	if err != nil {
-		t.Errorf("error opening db: %v", err)
-	}
-	defer db.SqlDB.Close()
-	dataStore, err := data.Load(db)
-	if err != nil {
-		t.Errorf("error loading data store: %v", err)
-	}
+	dataStore := setup(t)
 
 	legacy := Legacy{
 		CharaId00: 1001,
@@ -96,15 +72,7 @@ func TestLegacyAffinityForSameUmaInParent(t *testing.T) {
 }
 
 func TestLegacyAffinityForEmptyParent(t *testing.T) {
-	db, err := data.Open()
-	if err != nil {
-		t.Errorf("error opening db: %v", err)
-	}
-	defer db.SqlDB.Close()
-	dataStore, err := data.Load(db)
-	if err != nil {
-		t.Errorf("error loading data store: %v", err)
-	}
+	dataStore := setup(t)
 
 	legacy := Legacy{
 		CharaId00: 1001,

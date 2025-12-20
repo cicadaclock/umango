@@ -2,7 +2,11 @@
 
 package data
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/cicadaclock/umango/internal/pkg/db"
+)
 
 // Anything we want to store as a single source of data
 type DataStore struct {
@@ -16,9 +20,18 @@ type DataStore struct {
 }
 
 // Load DB tables into memory
-func Load(db *DB) (*DataStore, error) {
+func Init() (*DataStore, error) {
 	dataStore := DataStore{}
 	var err error
+
+	// Open DB connection
+	db, err := db.Open()
+	if err != nil {
+		return &dataStore, fmt.Errorf("opening master.mdb: %w", err)
+	}
+	defer db.SqlDB.Close()
+
+	// Store DB results into memory
 	dataStore.CardData, err = db.CardData()
 	if err != nil {
 		return &dataStore, fmt.Errorf("loading card_data into memory: %w", err)
