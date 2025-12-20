@@ -1,6 +1,9 @@
 package main
 
 import (
+	"fmt"
+	"log"
+
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
@@ -8,9 +11,15 @@ import (
 )
 
 func main() {
-	data.LoadDatabaseData()
 
-	// data.LoadVeteranData("path")
+	var db data.DB
+	db.Open()
+	defer db.SqlDB.Close()
+	dataStore, err := data.New(db)
+	if err != nil {
+		log.Fatalf("error loading data store: %v", err)
+	}
+	fmt.Println((*dataStore).SkillSparkNames[10680103])
 
 	a := app.New()
 	w := a.NewWindow("Hello")
