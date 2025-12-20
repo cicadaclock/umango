@@ -10,9 +10,9 @@ type DataStore struct {
 	SuccessionRelations       map[int]int
 	SuccessionRelationMembers map[int][]int
 	// Text mapping
-	SkillSparkNames map[int]string
-	VeteranCardId   map[int]string
-	CharaNames      map[int]string
+	FactorNames   map[int]string
+	VeteranCardId map[int]string
+	CharaNames    map[int]string
 }
 
 // Load DB tables into memory
@@ -31,7 +31,7 @@ func New(db DB) (*DataStore, error) {
 	if err != nil {
 		return &dataStore, fmt.Errorf("loading succession_relation_member into memory: %w", err)
 	}
-	dataStore.SkillSparkNames, err = db.TextDataSkillSpark()
+	dataStore.FactorNames, err = db.TextDataFactors()
 	if err != nil {
 		return &dataStore, fmt.Errorf("loading text_data for skill sparks into memory: %w", err)
 	}
@@ -44,4 +44,12 @@ func New(db DB) (*DataStore, error) {
 		return &dataStore, fmt.Errorf("loading text_data for chara id into memory: %w", err)
 	}
 	return &dataStore, nil
+}
+
+func (dataStore *DataStore) MapFactorNames(ids []int) []string {
+	result := make([]string, 0, len(ids))
+	for _, id := range ids {
+		result = append(result, dataStore.FactorNames[id])
+	}
+	return result
 }
