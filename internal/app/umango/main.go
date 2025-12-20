@@ -15,7 +15,7 @@ func main() {
 	var db data.DB
 	db.Open()
 	defer db.SqlDB.Close()
-	dataStore, err := data.New(db)
+	dataStore, err := data.Load(db)
 	if err != nil {
 		log.Fatalf("error loading data store: %v", err)
 	}
