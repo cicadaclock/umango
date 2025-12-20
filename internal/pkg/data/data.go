@@ -12,6 +12,7 @@ type DataStore struct {
 	// Text mapping
 	SkillSparkNames map[int]string
 	VeteranCardId   map[int]string
+	CharaNames      map[int]string
 }
 
 // Load DB tables into memory
@@ -37,6 +38,10 @@ func New(db DB) (*DataStore, error) {
 	dataStore.VeteranCardId, err = db.TextDataVeteranCardId()
 	if err != nil {
 		return &dataStore, fmt.Errorf("loading text_data for card id into memory: %w", err)
+	}
+	dataStore.CharaNames, err = db.TextDataCharaName()
+	if err != nil {
+		return &dataStore, fmt.Errorf("loading text_data for chara id into memory: %w", err)
 	}
 	return &dataStore, nil
 }
