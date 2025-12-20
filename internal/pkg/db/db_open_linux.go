@@ -1,6 +1,6 @@
 //go:build linux
 
-package data
+package db
 
 import (
 	"os"
