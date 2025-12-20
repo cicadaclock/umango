@@ -4,7 +4,7 @@ package data
 
 import "fmt"
 
-// Anything we want to store as a global state of data
+// Anything we want to store as a single source of data
 type DataStore struct {
 	CardData                  map[int]int
 	SuccessionRelations       map[int]int
@@ -16,7 +16,7 @@ type DataStore struct {
 }
 
 // Load DB tables into memory
-func New(db DB) (*DataStore, error) {
+func Load(db DB) (*DataStore, error) {
 	dataStore := DataStore{}
 	var err error
 	dataStore.CardData, err = db.CardData()

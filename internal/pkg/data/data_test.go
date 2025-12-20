@@ -9,7 +9,7 @@ func TestFactorNames(t *testing.T) {
 	var db DB
 	db.Open()
 	defer db.SqlDB.Close()
-	dataStore, err := New(db)
+	dataStore, err := Load(db)
 	if err != nil {
 		t.Errorf("error loading data store: %v", err)
 	}

@@ -29,17 +29,17 @@ func (legacy Legacy) Print(dataStore *data.DataStore) {
 
 func (legacy Legacy) Affinity(dataStore *data.DataStore) int {
 	sum := 0
-	sum += CalculateDuoAffinity(dataStore, legacy.CharaId00, legacy.CharaId10)
-	sum += CalculateDuoAffinity(dataStore, legacy.CharaId00, legacy.CharaId20)
-	sum += CalculateDuoAffinity(dataStore, legacy.CharaId10, legacy.CharaId20)
-	sum += CalculateTrioAffinity(dataStore, legacy.CharaId00, legacy.CharaId10, legacy.CharaId11)
-	sum += CalculateTrioAffinity(dataStore, legacy.CharaId00, legacy.CharaId10, legacy.CharaId12)
-	sum += CalculateTrioAffinity(dataStore, legacy.CharaId00, legacy.CharaId20, legacy.CharaId21)
-	sum += CalculateTrioAffinity(dataStore, legacy.CharaId00, legacy.CharaId20, legacy.CharaId22)
+	sum += calculateDuoAffinity(dataStore, legacy.CharaId00, legacy.CharaId10)
+	sum += calculateDuoAffinity(dataStore, legacy.CharaId00, legacy.CharaId20)
+	sum += calculateDuoAffinity(dataStore, legacy.CharaId10, legacy.CharaId20)
+	sum += calculateTrioAffinity(dataStore, legacy.CharaId00, legacy.CharaId10, legacy.CharaId11)
+	sum += calculateTrioAffinity(dataStore, legacy.CharaId00, legacy.CharaId10, legacy.CharaId12)
+	sum += calculateTrioAffinity(dataStore, legacy.CharaId00, legacy.CharaId20, legacy.CharaId21)
+	sum += calculateTrioAffinity(dataStore, legacy.CharaId00, legacy.CharaId20, legacy.CharaId22)
 	return sum
 }
 
-func SumAffinity(dataStore *data.DataStore, relationIds []int) int {
+func sumAffinity(dataStore *data.DataStore, relationIds []int) int {
 	var sum int = 0
 	for _, relationId := range relationIds {
 		sum += (*dataStore).SuccessionRelations[relationId]
@@ -47,34 +47,29 @@ func SumAffinity(dataStore *data.DataStore, relationIds []int) int {
 	return sum
 }
 
-func CalculateDuoAffinity(dataStore *data.DataStore, charaId1, charaId2 int) int {
+func calculateDuoAffinity(dataStore *data.DataStore, charaId1, charaId2 int) int {
 	if charaId1 == charaId2 {
 		return 0
 	}
 
 	relationIds_a := (*dataStore).SuccessionRelationMembers[charaId1]
 	relationIds_b := (*dataStore).SuccessionRelationMembers[charaId2]
-	matchedRelationIds := MatchRelationIds(relationIds_a, relationIds_b)
-	return SumAffinity(dataStore, matchedRelationIds)
+	matchedRelationIds := matchRelationIds(relationIds_a, relationIds_b)
+	return sumAffinity(dataStore, matchedRelationIds)
 }
 
-func CalculateTrioAffinity(dataStore *data.DataStore, charaId1, charaId2, charaId3 int) int {
+func calculateTrioAffinity(dataStore *data.DataStore, charaId1, charaId2, charaId3 int) int {
 	if charaId1 == charaId2 || charaId1 == charaId3 || charaId2 == charaId3 {
 		return 0
 	}
 	relationIds_a := (*dataStore).SuccessionRelationMembers[charaId1]
 	relationIds_b := (*dataStore).SuccessionRelationMembers[charaId2]
 	relationIds_c := (*dataStore).SuccessionRelationMembers[charaId3]
-	matchedRelationIds := MatchRelationIds(relationIds_a, relationIds_b, relationIds_c)
-	return SumAffinity(dataStore, matchedRelationIds)
+	matchedRelationIds := matchRelationIds(relationIds_a, relationIds_b, relationIds_c)
+	return sumAffinity(dataStore, matchedRelationIds)
 }
 
-// Return a list of relation IDs for the selected Uma
-func RelationIds(dataStore *data.DataStore, charaId int) []int {
-	return (*dataStore).SuccessionRelationMembers[charaId]
-}
-
-func MatchRelationIds(relationIdsArgs ...[]int) []int {
+func matchRelationIds(relationIdsArgs ...[]int) []int {
 	match := make(map[int]int)
 	matchNum := (1 << len(relationIdsArgs)) - 1
 

@@ -10,7 +10,7 @@ func TestLegacyAffinityForFullLegacy(t *testing.T) {
 	var db data.DB
 	db.Open()
 	defer db.SqlDB.Close()
-	dataStore, err := data.New(db)
+	dataStore, err := data.Load(db)
 	if err != nil {
 		t.Errorf("error loading data store: %v", err)
 	}
@@ -34,7 +34,7 @@ func TestLegacyAffinityForPartialLegacy(t *testing.T) {
 	var db data.DB
 	db.Open()
 	defer db.SqlDB.Close()
-	dataStore, err := data.New(db)
+	dataStore, err := data.Load(db)
 	if err != nil {
 		t.Errorf("error loading data store: %v", err)
 	}
@@ -56,7 +56,7 @@ func TestLegacyAffinityForEmptyLegacy(t *testing.T) {
 	var db data.DB
 	db.Open()
 	defer db.SqlDB.Close()
-	dataStore, err := data.New(db)
+	dataStore, err := data.Load(db)
 	if err != nil {
 		t.Errorf("error loading data store: %v", err)
 	}
@@ -72,7 +72,7 @@ func TestLegacyAffinityForSameUmaInParent(t *testing.T) {
 	var db data.DB
 	db.Open()
 	defer db.SqlDB.Close()
-	dataStore, err := data.New(db)
+	dataStore, err := data.Load(db)
 	if err != nil {
 		t.Errorf("error loading data store: %v", err)
 	}
@@ -91,7 +91,7 @@ func TestLegacyAffinityForEmptyParent(t *testing.T) {
 	var db data.DB
 	db.Open()
 	defer db.SqlDB.Close()
-	dataStore, err := data.New(db)
+	dataStore, err := data.Load(db)
 	if err != nil {
 		t.Errorf("error loading data store: %v", err)
 	}
