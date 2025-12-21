@@ -32,30 +32,36 @@ func Init() (*DataStore, error) {
 	defer db.SqlDB.Close()
 
 	// Store DB results into memory
-	dataStore.CardData, err = db.CardData()
-	if err != nil {
-		return &dataStore, fmt.Errorf("loading card_data into memory: %w", err)
+	chCount := 6
+	chCardData := make(chan map[int]int)
+	chSuccessionRelations := make(chan map[int]int)
+	chSuccessionRelationMembers := make(chan map[int][]int)
+	chFactorNames := make(chan map[int]string)
+	chVeteranCardId := make(chan map[int]string)
+	chCharaNames := make(chan map[int]string)
+	errCh := make(chan error)
+
+	go db.CardData(chCardData, errCh)
+	go db.SuccessionRelations(chSuccessionRelations, errCh)
+	go db.SuccessionRelationMembers(chSuccessionRelationMembers, errCh)
+	go db.TextDataFactors(chFactorNames, errCh)
+	go db.TextDataVeteranCardId(chVeteranCardId, errCh)
+	go db.TextDataCharaName(chCharaNames, errCh)
+
+	for range chCount {
+		select {
+		case err := <-errCh:
+			close(errCh)
+			return &dataStore, fmt.Errorf("load db data: %w", err)
+		case dataStore.CardData = <-chCardData:
+		case dataStore.SuccessionRelations = <-chSuccessionRelations:
+		case dataStore.SuccessionRelationMembers = <-chSuccessionRelationMembers:
+		case dataStore.FactorNames = <-chFactorNames:
+		case dataStore.VeteranCardId = <-chVeteranCardId:
+		case dataStore.CharaNames = <-chCharaNames:
+		}
 	}
-	dataStore.SuccessionRelations, err = db.SuccessionRelations()
-	if err != nil {
-		return &dataStore, fmt.Errorf("loading succession_relation into memory: %w", err)
-	}
-	dataStore.SuccessionRelationMembers, err = db.SuccessionRelationMembers()
-	if err != nil {
-		return &dataStore, fmt.Errorf("loading succession_relation_member into memory: %w", err)
-	}
-	dataStore.FactorNames, err = db.TextDataFactors()
-	if err != nil {
-		return &dataStore, fmt.Errorf("loading text_data for skill sparks into memory: %w", err)
-	}
-	dataStore.VeteranCardId, err = db.TextDataVeteranCardId()
-	if err != nil {
-		return &dataStore, fmt.Errorf("loading text_data for card id into memory: %w", err)
-	}
-	dataStore.CharaNames, err = db.TextDataCharaName()
-	if err != nil {
-		return &dataStore, fmt.Errorf("loading text_data for chara id into memory: %w", err)
-	}
+
 	return &dataStore, nil
 }
 
