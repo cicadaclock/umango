@@ -35,7 +35,7 @@ func Open() (*DB, error) {
 	return &db, nil
 }
 
-// Map id to chara_id from card_data
+// Map card_id to chara_id from card_data
 func (db *DB) CardData(c chan map[int]int, errCh chan error) {
 	result := make(map[int]int, 100)
 	rows, err := db.SqlDB.Query("SELECT t.id, t.chara_id FROM card_data AS t")
