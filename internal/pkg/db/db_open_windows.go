@@ -3,10 +3,15 @@
 package db
 
 import (
+	"fmt"
 	"os"
+	"path/filepath"
 )
 
 func DBPath() (string, error) {
 	dir, err := os.UserHomeDir()
-	return dir + "\\AppData\\LocalLow\\Cygames\\Umamusume\\master\\master.mdb", err
+	if err != nil {
+		return "", fmt.Errorf("get user home dir: %w", err)
+	}
+	return filepath.Join(dir, "\\AppData\\LocalLow\\Cygames\\Umamusume\\master\\master.mdb"), nil
 }
