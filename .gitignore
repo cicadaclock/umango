@@ -4,3 +4,4 @@
 *.db
 **/meta
 temp/
+*.code-workspace
