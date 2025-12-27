@@ -5,3 +5,4 @@
 **/meta
 temp/
 *.code-workspace
+*_debug_bin*
