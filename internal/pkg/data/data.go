@@ -4,6 +4,7 @@ package data
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/cicadaclock/umango/internal/pkg/db"
 )
@@ -13,6 +14,14 @@ type DataStore struct {
 	CardData                  map[int]int
 	SuccessionRelations       map[int]int
 	SuccessionRelationMembers map[int][]int
+
+	// Stat sparks (spd/pow/sta/gut/wit) have factor type 1
+	// Surface/style/distance sparks have factor type 2
+	// Unique sparks have factor type 3
+	// Regular sparks have factor type 4
+	// Race sparks (like Hopeless) has factor type 5
+	FactorType map[int]int
+
 	// Text mapping
 	FactorNames   map[int]string
 	VeteranCardId map[int]string
@@ -32,13 +41,14 @@ func Init() (*DataStore, error) {
 	defer db.SqlDB.Close()
 
 	// Store DB results into memory
-	chCount := 6
+	chCount := 7
 	chCardData := make(chan map[int]int)
 	chSuccessionRelations := make(chan map[int]int)
 	chSuccessionRelationMembers := make(chan map[int][]int)
 	chFactorNames := make(chan map[int]string)
 	chVeteranCardId := make(chan map[int]string)
 	chCharaNames := make(chan map[int]string)
+	chFactorType := make(chan map[int]int)
 	errCh := make(chan error)
 
 	go db.CardData(chCardData, errCh)
@@ -47,6 +57,7 @@ func Init() (*DataStore, error) {
 	go db.TextDataFactors(chFactorNames, errCh)
 	go db.TextDataVeteranCardId(chVeteranCardId, errCh)
 	go db.TextDataCharaName(chCharaNames, errCh)
+	go db.SuccessionFactors(chFactorType, errCh)
 
 	for range chCount {
 		select {
@@ -59,6 +70,7 @@ func Init() (*DataStore, error) {
 		case dataStore.FactorNames = <-chFactorNames:
 		case dataStore.VeteranCardId = <-chVeteranCardId:
 		case dataStore.CharaNames = <-chCharaNames:
+		case dataStore.FactorType = <-chFactorType:
 		}
 	}
 
@@ -68,7 +80,12 @@ func Init() (*DataStore, error) {
 func (dataStore *DataStore) MapFactorNames(ids []int) []string {
 	result := make([]string, 0, len(ids))
 	for _, id := range ids {
-		result = append(result, dataStore.FactorNames[id])
+		var level strings.Builder
+		level.WriteString(" ")
+		for range id % 100 {
+			_, _ = level.WriteString("★")
+		}
+		result = append(result, dataStore.FactorNames[id]+level.String())
 	}
 	return result
 }
