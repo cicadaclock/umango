@@ -130,6 +130,27 @@ func (db *DB) SuccessionRelationMembers(c chan map[int][]int, errCh chan error) 
 	c <- result
 }
 
+func (db *DB) SuccessionFactors(c chan map[int]int, errCh chan error) {
+	result := make(map[int]int, 1000)
+	rows, err := db.SqlDB.Query("SELECT t.factor_id, t.factor_type FROM succession_factor AS t")
+	if err != nil {
+		errCh <- fmt.Errorf("query succession_factor rows: %w", err)
+		return
+	}
+	defer rows.Close()
+	var factor_id int
+	var factor_type int
+	for rows.Next() {
+		err := rows.Scan(&factor_id, &factor_type)
+		if err != nil {
+			errCh <- fmt.Errorf("scanning succession_factor rows, %w", err)
+			return
+		}
+		result[factor_id] = factor_type
+	}
+	c <- result
+}
+
 // Map index to text from text_data
 func (db *DB) textData(category, minIndex, maxIndex int, between bool) (map[int]string, error) {
 	if minIndex > maxIndex {
