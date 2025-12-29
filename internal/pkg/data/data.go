@@ -90,6 +90,14 @@ func (dataStore *DataStore) MapFactorNames(ids []int) []string {
 	return result
 }
 
+func (dataStore *DataStore) MapVeteranCardIdName(veteranCardIds []int) []string {
+	names := make([]string, 0, len(veteranCardIds))
+	for _, id := range veteranCardIds {
+		names = append(names, dataStore.VeteranCardId[id])
+	}
+	return names
+}
+
 func (dataStore *DataStore) MapVeteranCardIdToCharaName(veteranCardIds []int) []string {
 	names := make([]string, 0, len(veteranCardIds))
 	for _, id := range veteranCardIds {
