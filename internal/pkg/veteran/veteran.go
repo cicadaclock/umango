@@ -1,11 +1,16 @@
+// Interface for handling the data from veterans.json in memory
+
 package veteran
 
 import (
 	"encoding/json"
 	"fmt"
 	"os"
+
+	"github.com/ichiban/soa"
 )
 
+//go:generate go tool soagen
 type Veteran struct {
 	// Metadata
 	CardId        int    `json:"card_id"`
@@ -24,7 +29,6 @@ type Veteran struct {
 	SuccessionCharaArray []SuccessionChara `json:"succession_chara_array"`
 	WinSaddleIdArray     []int             `json:"win_saddle_id_array"`
 	NicknameIdArray      []int             `json:"nickname_id_array"` // Epithets, maybe relevant?
-
 }
 
 type SuccessionChara struct {
@@ -33,15 +37,27 @@ type SuccessionChara struct {
 	PositionId       int   `json:"position_id"`
 }
 
-func LoadVeteranList(path string) ([]Veteran, error) {
+func loadVeterans(path string) ([]Veteran, error) {
 	file, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("reading file %s: %w", path, err)
+		return nil, fmt.Errorf("read file %s: %w", path, err)
 	}
 	var veteranList []Veteran
 	err = json.Unmarshal(file, &veteranList)
 	if err != nil {
-		return nil, fmt.Errorf("unmarshalling veteran list: %w", err)
+		return nil, fmt.Errorf("unmarshal: %w", err)
 	}
 	return veteranList, nil
+}
+
+func Init(path string) (*VeteranSlice, error) {
+	veterans, err := loadVeterans(path)
+	if err != nil {
+		return nil, fmt.Errorf("load veteran list: %w", err)
+	}
+	veteranSlice := soa.Make[VeteranSlice](0, len(veterans))
+	for _, veteran := range veterans {
+		veteranSlice = soa.Append(veteranSlice, veteran)
+	}
+	return &veteranSlice, nil
 }
