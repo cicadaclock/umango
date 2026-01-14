@@ -8,15 +8,23 @@ import (
 )
 
 const (
-	ColorNameFactorBlue  fyne.ThemeColorName = "factorBlue"
-	ColorNameFactorPink  fyne.ThemeColorName = "factorPink"
-	ColorNameFactorGreen fyne.ThemeColorName = "factorGreen"
-	ColorNameFactorWhite fyne.ThemeColorName = "factorWhite"
+	// Font sizes
+	FontSizeVeteranWidget fyne.ThemeSizeName = "veteranWidget"
+	// Colors
+	ColorNameFactorBlue       fyne.ThemeColorName = "factorBlue"
+	ColorNameFactorRed        fyne.ThemeColorName = "factorRed"
+	ColorNameFactorGreen      fyne.ThemeColorName = "factorGreen"
+	ColorNameFactorWhite      fyne.ThemeColorName = "factorWhite"
+	ColorNameFactorBackground fyne.ThemeColorName = "factorBackground"
 )
 
 var (
-	colorFactorBlue = color.NRGBA{R: 0x00, G: 0x6c, B: 0xff, A: 0xff}
-	colorFactorPink = color.NRGBA{R: 0xf4, G: 0x43, B: 0x36, A: 0xff}
+	colorFactorBlue       = color.NRGBA{R: 0x37, G: 0xb7, B: 0xf4, A: 0xff}
+	colorFactorRed        = color.NRGBA{R: 0xff, G: 0x76, B: 0xb2, A: 0xff}
+	colorFactorGreen      = color.NRGBA{R: 0xad, G: 0xe2, B: 0x60, A: 0xff}
+	colorFactorWhite      = color.NRGBA{R: 0xff, G: 0xff, B: 0xff, A: 0xff}
+	colorFactorBackground = color.NRGBA{R: 0x1f, G: 0x1f, B: 0x1f, A: 0xff}
+	colorBackground       = color.NRGBA{R: 0xdd, G: 0xdd, B: 0xdd, A: 0xff}
 )
 
 type myTheme struct{}
@@ -24,10 +32,19 @@ type myTheme struct{}
 var _ fyne.Theme = (*myTheme)(nil)
 
 func (m myTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) color.Color {
-	if name == ColorNameFactorBlue {
+	switch name {
+	case ColorNameFactorBlue:
 		return colorFactorBlue
-	} else if name == ColorNameFactorPink {
-		return colorFactorPink
+	case ColorNameFactorRed:
+		return colorFactorRed
+	case ColorNameFactorGreen:
+		return colorFactorGreen
+	case ColorNameFactorWhite:
+		return colorFactorWhite
+	case ColorNameFactorBackground:
+		return colorFactorBackground
+	case theme.ColorNameBackground:
+		return colorBackground
 	}
 
 	return theme.DefaultTheme().Color(name, variant)
@@ -42,9 +59,14 @@ func (m myTheme) Icon(name fyne.ThemeIconName) fyne.Resource {
 }
 
 func (m myTheme) Font(style fyne.TextStyle) fyne.Resource {
-	return theme.DefaultTheme().Font(style)
+	font, _ := fyne.LoadResourceFromPath("internal/font/Inter-VariableFont_opsz,wght.ttf")
+	return font
 }
 
 func (m myTheme) Size(name fyne.ThemeSizeName) float32 {
+	switch name {
+	case FontSizeVeteranWidget:
+		return 18.0
+	}
 	return theme.DefaultTheme().Size(name)
 }

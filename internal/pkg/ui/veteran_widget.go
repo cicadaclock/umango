@@ -1,10 +1,9 @@
 package ui
 
 import (
-	"strings"
-
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 	"github.com/cicadaclock/umango/internal/pkg/data"
 	"github.com/cicadaclock/umango/internal/pkg/veteran"
@@ -16,49 +15,64 @@ type VeteranWidget struct {
 	dataStore *data.DataStore
 }
 
-func NewVeteranView(dataStore *data.DataStore, veteran veteran.Veteran) *VeteranWidget {
-	veteranView := VeteranWidget{
+const (
+	factorCornerRadius float32 = 32
+)
+
+func NewVeteranWidget(dataStore *data.DataStore, veteran veteran.Veteran) *VeteranWidget {
+	veteranWidget := VeteranWidget{
 		Veteran:   veteran,
 		dataStore: dataStore,
 	}
-
-	return &veteranView
+	veteranWidget.ExtendBaseWidget(&veteranWidget)
+	return &veteranWidget
 }
 
 func (item *VeteranWidget) CreateRenderer() fyne.WidgetRenderer {
 	temp := createSingleVeteranView(item.dataStore, item.Veteran.FactorIdArray)
-	temp2 := container.NewHScroll(temp)
-	return widget.NewSimpleRenderer(temp2)
+	// temp2 := container.NewHScroll(temp)
+	return widget.NewSimpleRenderer(temp)
 }
 
+// Creates view of all factors
 func createSingleVeteranView(dataStore *data.DataStore, factors []int) *fyne.Container {
-	sparkView := container.NewHBox()
+	var blueFactors, redFactors, greenFactors, raceFactors, whiteFactors []*FactorWidget
 	for _, factorId := range factors {
-		spark := dataStore.FactorNames[factorId]
-		var level strings.Builder
-		for range factorId % 100 {
-			_, _ = level.WriteString("★")
+		factor := dataStore.FactorNames[factorId]
+		factorType := data.FactorType(dataStore.FactorType[factorId])
+		factorWidget := NewFactorWidget(factor, factorId%100, factorType, factorCornerRadius)
+		switch factorType {
+		case data.FactorTypeBlue:
+			blueFactors = append(blueFactors, factorWidget)
+		case data.FactorTypeRed:
+			redFactors = append(redFactors, factorWidget)
+		case data.FactorTypeGreen:
+			greenFactors = append(greenFactors, factorWidget)
+		case data.FactorTypeRace:
+			raceFactors = append(raceFactors, factorWidget)
+		case data.FactorTypeWhite:
+			whiteFactors = append(whiteFactors, factorWidget)
 		}
-		text := createFactorRichText(spark, level.String())
-		sparkView.Add(text)
 	}
-	return sparkView
-}
 
-func createFactorRichText(spark, level string) *widget.RichText {
-	sparkTextSegment := widget.TextSegment{
-		Text: spark,
-		Style: widget.RichTextStyle{
-			Inline:    true,
-			ColorName: ColorNameFactorBlue,
-		},
+	rgbSparkView := container.NewVBox()
+	whiteSparkView := container.New(layout.NewRowWrapLayout())
+	for _, factorWidget := range blueFactors {
+		rgbSparkView.Add(factorWidget)
 	}
-	levelTextSegment := widget.TextSegment{
-		Text: level,
-		Style: widget.RichTextStyle{
-			Inline:    true,
-			ColorName: ColorNameFactorPink,
-		},
+	for _, factorWidget := range redFactors {
+		rgbSparkView.Add(factorWidget)
 	}
-	return widget.NewRichText(&sparkTextSegment, &levelTextSegment)
+	for _, factorWidget := range greenFactors {
+		rgbSparkView.Add(factorWidget)
+	}
+	for _, factorWidget := range raceFactors {
+		whiteSparkView.Add(factorWidget)
+	}
+	for _, factorWidget := range whiteFactors {
+		whiteSparkView.Add(factorWidget)
+	}
+
+	veteranView := container.NewBorder(nil, nil, rgbSparkView, nil, whiteSparkView)
+	return veteranView
 }
