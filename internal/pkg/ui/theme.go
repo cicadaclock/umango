@@ -11,11 +11,11 @@ const (
 	// Font sizes
 	FontSizeVeteranWidget fyne.ThemeSizeName = "veteranWidget"
 	// Colors
-	ColorNameFactorBlue       fyne.ThemeColorName = "factorBlue"
-	ColorNameFactorRed        fyne.ThemeColorName = "factorRed"
-	ColorNameFactorGreen      fyne.ThemeColorName = "factorGreen"
-	ColorNameFactorWhite      fyne.ThemeColorName = "factorWhite"
-	ColorNameFactorBackground fyne.ThemeColorName = "factorBackground"
+	ColorFactorBlue       fyne.ThemeColorName = "factorBlue"
+	ColorFactorRed        fyne.ThemeColorName = "factorRed"
+	ColorFactorGreen      fyne.ThemeColorName = "factorGreen"
+	ColorFactorWhite      fyne.ThemeColorName = "factorWhite"
+	ColorFactorBackground fyne.ThemeColorName = "factorBackground"
 )
 
 var (
@@ -33,19 +33,20 @@ var _ fyne.Theme = (*myTheme)(nil)
 
 func (m myTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) color.Color {
 	switch name {
-	case ColorNameFactorBlue:
+	case ColorFactorBlue:
 		return colorFactorBlue
-	case ColorNameFactorRed:
+	case ColorFactorRed:
 		return colorFactorRed
-	case ColorNameFactorGreen:
+	case ColorFactorGreen:
 		return colorFactorGreen
-	case ColorNameFactorWhite:
+	case ColorFactorWhite:
 		return colorFactorWhite
-	case ColorNameFactorBackground:
+	case ColorFactorBackground:
 		return colorFactorBackground
 	case theme.ColorNameBackground:
 		return colorBackground
 	}
+	theme.DefaultTheme()
 
 	return theme.DefaultTheme().Color(name, variant)
 }
@@ -66,7 +67,7 @@ func (m myTheme) Font(style fyne.TextStyle) fyne.Resource {
 func (m myTheme) Size(name fyne.ThemeSizeName) float32 {
 	switch name {
 	case FontSizeVeteranWidget:
-		return 18.0
+		return 16.0
 	}
 	return theme.DefaultTheme().Size(name)
 }

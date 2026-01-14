@@ -36,7 +36,7 @@ func (fw *FactorWidget) CreateRenderer() fyne.WidgetRenderer {
 	richText := createFactorRichText(fw.Factor, fw.Level, fw.FactorType)
 	rect := canvas.NewRectangle(getColor(fw.FactorType))
 	rect.CornerRadius = fw.CornerRadius
-	rect.FillColor = theme.Color(ColorNameFactorBackground)
+	rect.FillColor = theme.Color(ColorFactorBackground)
 	rect.StrokeColor = getColor(fw.FactorType)
 	rect.StrokeWidth = 2.0
 
@@ -51,15 +51,15 @@ func getColor(factorType data.FactorType) color.Color {
 	var colorName fyne.ThemeColorName
 	switch factorType {
 	case data.FactorTypeBlue:
-		colorName = ColorNameFactorBlue
+		colorName = ColorFactorBlue
 	case data.FactorTypeRed:
-		colorName = ColorNameFactorRed
+		colorName = ColorFactorRed
 	case data.FactorTypeGreen:
-		colorName = ColorNameFactorGreen
+		colorName = ColorFactorGreen
 	case data.FactorTypeWhite:
-		colorName = ColorNameFactorWhite
+		colorName = ColorFactorWhite
 	case data.FactorTypeRace:
-		colorName = ColorNameFactorWhite
+		colorName = ColorFactorWhite
 	}
 	return theme.Color(colorName)
 }
@@ -69,15 +69,15 @@ func createFactorRichText(factor string, level int, factorType data.FactorType) 
 	var colorName fyne.ThemeColorName
 	switch factorType {
 	case data.FactorTypeBlue:
-		colorName = ColorNameFactorBlue
+		colorName = ColorFactorBlue
 	case data.FactorTypeRed:
-		colorName = ColorNameFactorRed
+		colorName = ColorFactorRed
 	case data.FactorTypeGreen:
-		colorName = ColorNameFactorGreen
+		colorName = ColorFactorGreen
 	case data.FactorTypeWhite:
-		colorName = ColorNameFactorWhite
+		colorName = ColorFactorWhite
 	case data.FactorTypeRace:
-		colorName = ColorNameFactorWhite
+		colorName = ColorFactorWhite
 	}
 
 	sparkTextSegment := widget.TextSegment{
