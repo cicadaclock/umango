@@ -42,6 +42,7 @@ func temp(dataStore *data.DataStore) *VeteranWidget {
 		FactorIdArray: []int{
 			303,
 			3202,
+			10070102,
 			1000401,
 			1001101,
 			2003501,
@@ -51,14 +52,14 @@ func temp(dataStore *data.DataStore) *VeteranWidget {
 			2015603,
 		},
 	}
-	veteranWidget := NewVeteranView(dataStore, veteran)
+	veteranWidget := NewVeteranWidget(dataStore, veteran)
 	return veteranWidget
 }
 
 func createTable() *ColumnGrid {
 	columnGrid := NewColumnGrid([][]string{
 		{"reallylongname1", "name2", "name3", "name4", "name5", "name6", "name1", "name2", "name3", "name4", "name5", "name6"},
-		{"addr1", "addr2", "addr3"},
+		{"addr11", "addr2", "addr3"},
 		{"addr21", "addr2", "addr3"},
 		{"addr31", "addr2", "addr3"},
 		{"addr41", "addr2", "addr3"},

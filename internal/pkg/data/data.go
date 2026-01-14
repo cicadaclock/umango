@@ -14,19 +14,23 @@ type DataStore struct {
 	CardData                  map[int]int
 	SuccessionRelations       map[int]int
 	SuccessionRelationMembers map[int][]int
-
-	// Stat sparks (spd/pow/sta/gut/wit) have factor type 1
-	// Surface/style/distance sparks have factor type 2
-	// Unique sparks have factor type 3
-	// Regular sparks have factor type 4
-	// Race sparks (like Hopeless) has factor type 5
-	FactorType map[int]int
+	FactorType                map[int]int
 
 	// Text mapping
 	FactorNames   map[int]string
 	VeteranCardId map[int]string
 	CharaNames    map[int]string
 }
+
+type FactorType int
+
+const (
+	FactorTypeBlue  FactorType = 1
+	FactorTypeRed   FactorType = 2
+	FactorTypeGreen FactorType = 3
+	FactorTypeWhite FactorType = 4
+	FactorTypeRace  FactorType = 5
+)
 
 // Load DB tables into memory
 func Init() (*DataStore, error) {
