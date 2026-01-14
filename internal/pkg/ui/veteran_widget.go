@@ -29,13 +29,15 @@ func NewVeteranWidget(dataStore *data.DataStore, veteran veteran.Veteran) *Veter
 }
 
 func (item *VeteranWidget) CreateRenderer() fyne.WidgetRenderer {
-	temp := createSingleVeteranView(item.dataStore, item.Veteran.FactorIdArray)
+	temp := createSingleVeteranView(item)
 	// temp2 := container.NewHScroll(temp)
 	return widget.NewSimpleRenderer(temp)
 }
 
 // Creates view of all factors
-func createSingleVeteranView(dataStore *data.DataStore, factors []int) *fyne.Container {
+func createSingleVeteranView(item *VeteranWidget) *fyne.Container {
+	dataStore := item.dataStore
+	factors := item.Veteran.FactorIdArray
 	var blueFactors, redFactors, greenFactors, raceFactors, whiteFactors []*FactorWidget
 	for _, factorId := range factors {
 		factor := dataStore.FactorNames[factorId]
