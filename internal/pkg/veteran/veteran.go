@@ -10,6 +10,17 @@ import (
 	"github.com/ichiban/soa"
 )
 
+const (
+	// Left side legacy
+	LegacyParentL       LegacyName = 10
+	LegacyGrandparentL1 LegacyName = 11
+	LegacyGrandparentL2 LegacyName = 12
+	// Right side legacy
+	LegacyParentR       LegacyName = 20
+	LegacyGrandparentR1 LegacyName = 21
+	LegacyGrandparentR2 LegacyName = 22
+)
+
 //go:generate go tool soagen
 type Veteran struct {
 	// Metadata
@@ -37,6 +48,28 @@ type SuccessionChara struct {
 	PositionId       int   `json:"position_id"`
 }
 
+func Init(path string) (*VeteranSlice, error) {
+	veterans, err := loadVeterans(path)
+	if err != nil {
+		return nil, fmt.Errorf("load veteran list: %w", err)
+	}
+	veteranSlice := soa.Make[VeteranSlice](0, len(veterans))
+	for _, veteran := range veterans {
+		veteranSlice = soa.Append(veteranSlice, veteran)
+	}
+	return &veteranSlice, nil
+}
+
+// Returns an array of factors for a given legacy
+func (v *Veteran) SuccessionCharaFactors(l LegacyName) []int {
+	for _, successionChara := range v.SuccessionCharaArray {
+		if successionChara.PositionId == l.Int() {
+			return successionChara.FactorIdArray
+		}
+	}
+	return []int{}
+}
+
 func loadVeterans(path string) ([]Veteran, error) {
 	file, err := os.ReadFile(path)
 	if err != nil {
@@ -50,14 +83,9 @@ func loadVeterans(path string) ([]Veteran, error) {
 	return veteranList, nil
 }
 
-func Init(path string) (*VeteranSlice, error) {
-	veterans, err := loadVeterans(path)
-	if err != nil {
-		return nil, fmt.Errorf("load veteran list: %w", err)
-	}
-	veteranSlice := soa.Make[VeteranSlice](0, len(veterans))
-	for _, veteran := range veterans {
-		veteranSlice = soa.Append(veteranSlice, veteran)
-	}
-	return &veteranSlice, nil
+type LegacyName int
+
+// Returns the integer representation of the legacy name
+func (l LegacyName) Int() int {
+	return int(l)
 }
