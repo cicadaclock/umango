@@ -22,16 +22,6 @@ type DataStore struct {
 	CharaNames    map[int]string
 }
 
-type FactorType int
-
-const (
-	FactorTypeBlue  FactorType = 1
-	FactorTypeRed   FactorType = 2
-	FactorTypeGreen FactorType = 3
-	FactorTypeWhite FactorType = 4
-	FactorTypeRace  FactorType = 5
-)
-
 // Load DB tables into memory
 func Init() (*DataStore, error) {
 	dataStore := DataStore{}
@@ -110,4 +100,19 @@ func (dataStore *DataStore) MapVeteranCardIdToCharaName(veteranCardIds []int) []
 		names = append(names, charaName)
 	}
 	return names
+}
+
+// Internal ID for distinguishing between different factor types
+type FactorType int
+
+const (
+	FactorTypeBlue  FactorType = 1
+	FactorTypeRed   FactorType = 2
+	FactorTypeGreen FactorType = 3
+	FactorTypeWhite FactorType = 4
+	FactorTypeRace  FactorType = 5
+)
+
+func (ft FactorType) Int() int {
+	return int(ft)
 }
