@@ -11,36 +11,41 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/cicadaclock/umango/internal/pkg/data"
+	"github.com/cicadaclock/umango/internal/pkg/veteran"
 )
 
 type FactorWidget struct {
 	widget.BaseWidget
-	Factor       string
-	Level        int
-	FactorType   data.FactorType
-	CornerRadius float32
+	Factor          string
+	Level           int
+	FactorType      data.FactorType
+	CornerRadius    float32
+	InternalPadding float32
+	LegacyName      veteran.LegacyName
 }
 
-func NewFactorWidget(factor string, level int, factorType data.FactorType, cornerRadius float32) *FactorWidget {
+func NewFactorWidget(factorName string, level int, factorType data.FactorType, cornerRadius float32, internalPadding float32, legacyName veteran.LegacyName) *FactorWidget {
 	sparkWidget := FactorWidget{
-		Factor:       factor,
-		Level:        level,
-		FactorType:   factorType,
-		CornerRadius: cornerRadius,
+		Factor:          factorName,
+		Level:           level,
+		FactorType:      factorType,
+		CornerRadius:    cornerRadius,
+		InternalPadding: internalPadding,
+		LegacyName:      legacyName,
 	}
 	sparkWidget.ExtendBaseWidget(&sparkWidget)
 	return &sparkWidget
 }
 
 func (fw *FactorWidget) CreateRenderer() fyne.WidgetRenderer {
-	richText := createFactorRichText(fw.Factor, fw.Level, fw.FactorType)
 	rect := canvas.NewRectangle(getColor(fw.FactorType))
 	rect.CornerRadius = fw.CornerRadius
 	rect.FillColor = theme.Color(ColorFactorBackground)
 	rect.StrokeColor = getColor(fw.FactorType)
 	rect.StrokeWidth = 2.0
 
-	richTextContainer := container.New(layout.NewCustomPaddedLayout(theme.Padding(), theme.Padding(), theme.Padding()*2, theme.Padding()*2), container.NewCenter(richText))
+	richText := createFactorRichText(fw.Factor, fw.Level, fw.FactorType, fw.LegacyName)
+	richTextContainer := container.New(layout.NewCustomPaddedLayout(0, 0, fw.InternalPadding*2, fw.InternalPadding*2), container.NewCenter(richText))
 
 	factorView := container.NewHBox(container.NewStack(rect, richTextContainer))
 	return widget.NewSimpleRenderer(factorView)
@@ -50,12 +55,12 @@ func (fw *FactorWidget) CreateRenderer() fyne.WidgetRenderer {
 func getColor(factorType data.FactorType) color.Color {
 	var colorName fyne.ThemeColorName
 	switch factorType {
-	case data.FactorTypeBlue:
-		colorName = ColorFactorBlue
 	case data.FactorTypeRed:
 		colorName = ColorFactorRed
 	case data.FactorTypeGreen:
 		colorName = ColorFactorGreen
+	case data.FactorTypeBlue:
+		colorName = ColorFactorBlue
 	case data.FactorTypeWhite:
 		colorName = ColorFactorWhite
 	case data.FactorTypeRace:
@@ -65,8 +70,8 @@ func getColor(factorType data.FactorType) color.Color {
 }
 
 // Convert factor to richtext representation for color/font
-func createFactorRichText(factor string, level int, factorType data.FactorType) *widget.RichText {
-	var colorName fyne.ThemeColorName
+func createFactorRichText(factorName string, level int, factorType data.FactorType, legacyName veteran.LegacyName) *widget.RichText {
+	var colorName, starsColorName fyne.ThemeColorName
 	switch factorType {
 	case data.FactorTypeBlue:
 		colorName = ColorFactorBlue
@@ -79,16 +84,30 @@ func createFactorRichText(factor string, level int, factorType data.FactorType) 
 	case data.FactorTypeRace:
 		colorName = ColorFactorWhite
 	}
+	if legacyName == veteran.LegacyNameMain {
+		starsColorName = ColorFactorMain
+	} else {
+		starsColorName = colorName
+	}
 
 	sparkTextSegment := widget.TextSegment{
-		Text: factor + buildStars(" ", level),
+		Text: factorName,
 		Style: widget.RichTextStyle{
 			Inline:    true,
 			ColorName: colorName,
 			SizeName:  fyne.ThemeSizeName(FontSizeVeteranWidget),
 		},
 	}
-	return widget.NewRichText(&sparkTextSegment)
+
+	starsTextSegment := widget.TextSegment{
+		Text: buildStars(" ", level),
+		Style: widget.RichTextStyle{
+			Inline:    true,
+			ColorName: starsColorName,
+			SizeName:  fyne.ThemeSizeName(FontSizeVeteranWidget),
+		},
+	}
+	return widget.NewRichText(&sparkTextSegment, &starsTextSegment)
 }
 
 // Append stars based on factor level
