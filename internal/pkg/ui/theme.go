@@ -11,6 +11,7 @@ const (
 	// Font sizes
 	FontSizeVeteranWidget fyne.ThemeSizeName = "veteranWidget"
 	// Colors
+	ColorFactorMain       fyne.ThemeColorName = "factorMain"
 	ColorFactorBlue       fyne.ThemeColorName = "factorBlue"
 	ColorFactorRed        fyne.ThemeColorName = "factorRed"
 	ColorFactorGreen      fyne.ThemeColorName = "factorGreen"
@@ -19,6 +20,7 @@ const (
 )
 
 var (
+	colorFactorMain       = color.NRGBA{R: 0xff, G: 0xcf, B: 0x33, A: 0xff}
 	colorFactorBlue       = color.NRGBA{R: 0x37, G: 0xb7, B: 0xf4, A: 0xff}
 	colorFactorRed        = color.NRGBA{R: 0xff, G: 0x76, B: 0xb2, A: 0xff}
 	colorFactorGreen      = color.NRGBA{R: 0xad, G: 0xe2, B: 0x60, A: 0xff}
@@ -33,6 +35,8 @@ var _ fyne.Theme = (*myTheme)(nil)
 
 func (m myTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) color.Color {
 	switch name {
+	case ColorFactorMain:
+		return colorFactorMain
 	case ColorFactorBlue:
 		return colorFactorBlue
 	case ColorFactorRed:
@@ -67,7 +71,7 @@ func (m myTheme) Font(style fyne.TextStyle) fyne.Resource {
 func (m myTheme) Size(name fyne.ThemeSizeName) float32 {
 	switch name {
 	case FontSizeVeteranWidget:
-		return 16.0
+		return 14.0
 	}
 	return theme.DefaultTheme().Size(name)
 }
