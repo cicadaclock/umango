@@ -1,5 +1,4 @@
 // Interface for handling the data from veterans.json in memory
-
 package veteran
 
 import (
@@ -11,25 +10,36 @@ import (
 )
 
 const (
-	// Left side legacy
-	LegacyParentL       LegacyName = 10
-	LegacyGrandparentL1 LegacyName = 11
-	LegacyGrandparentL2 LegacyName = 12
+	// Main Legacy
+	LegacyNameMain LegacyName = 0
+	// Left side legacy parent
+	LegacyNameParentL LegacyName = 10
+	// Left side legacy grandparent 1
+	LegacyNameGrandparentL1 LegacyName = 11
+	// Left side legacy grandparent 2
+	LegacyNameGrandparentL2 LegacyName = 12
 	// Right side legacy
-	LegacyParentR       LegacyName = 20
-	LegacyGrandparentR1 LegacyName = 21
-	LegacyGrandparentR2 LegacyName = 22
+	LegacyNameParentR LegacyName = 20
+	// Right side legacy grandparent 1
+	LegacyNameGrandparentR1 LegacyName = 21
+	// Right side legacy grandparent 2
+	LegacyNameGrandparentR2 LegacyName = 22
 )
 
 //go:generate go tool soagen
 type Veteran struct {
 	// Metadata
-	CardId        int    `json:"card_id"`
-	CreateTime    string `json:"create_time"`
-	RankScore     int    `json:"rank_score"`
-	FactorIdArray []int  `json:"factor_id_array"`
+
+	// Veteran ID that is unique locally to your account
+	LocalVeteranId int    `json:"single_mode_chara_id"`
+	CardId         int    `json:"card_id"`
+	CreateTime     string `json:"create_time"`
+	RankScore      int    `json:"rank_score"`
+	// Sparks
+	FactorIdArray []int `json:"factor_id_array"`
 
 	// Racing stats
+
 	Speed   int `json:"speed"`
 	Stamina int `json:"stamina"`
 	Power   int `json:"power"`
@@ -37,15 +47,23 @@ type Veteran struct {
 	Wit     int `json:"wiz"`
 
 	// Legacy/affinity calcs
+
+	// Legacy parent and grandparent umas
 	SuccessionCharaArray []SuccessionChara `json:"succession_chara_array"`
-	WinSaddleIdArray     []int             `json:"win_saddle_id_array"`
-	NicknameIdArray      []int             `json:"nickname_id_array"` // Epithets, maybe relevant?
+	// Races placed 1st in
+	WinSaddleIdArray []int `json:"win_saddle_id_array"`
+	// Epithets
+	NicknameIdArray []int `json:"nickname_id_array"`
 }
 
+// Legacy parent and grandparent
 type SuccessionChara struct {
-	FactorIdArray    []int `json:"factor_id_array"`
+	// Sparks
+	FactorIdArray []int `json:"factor_id_array"`
+	// Races placed 1st in
 	WinSaddleIdArray []int `json:"win_saddle_id_array"`
-	PositionId       int   `json:"position_id"`
+	// Legacy position (parent 1 or 2, grandparent 1 or 2)
+	PositionId int `json:"position_id"`
 }
 
 func Init(path string) (*VeteranSlice, error) {
@@ -61,7 +79,7 @@ func Init(path string) (*VeteranSlice, error) {
 }
 
 // Returns an array of factors for a given legacy
-func (v *Veteran) SuccessionCharaFactors(l LegacyName) []int {
+func (v *Veteran) LegacyFactor(l LegacyName) []int {
 	for _, successionChara := range v.SuccessionCharaArray {
 		if successionChara.PositionId == l.Int() {
 			return successionChara.FactorIdArray
@@ -83,6 +101,7 @@ func loadVeterans(path string) ([]Veteran, error) {
 	return veteranList, nil
 }
 
+// Internal ID for distinguishing between different legacy umas
 type LegacyName int
 
 // Returns the integer representation of the legacy name

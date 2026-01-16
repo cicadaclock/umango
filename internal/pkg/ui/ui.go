@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"fmt"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
@@ -38,21 +40,12 @@ func mainMenu(dataStore *data.DataStore) *fyne.Container {
 }
 
 func temp(dataStore *data.DataStore) *VeteranWidget {
-	veteran := veteran.Veteran{
-		FactorIdArray: []int{
-			303,
-			3202,
-			10070102,
-			1000401,
-			1001101,
-			2003501,
-			2004901,
-			2010503,
-			2011601,
-			2015603,
-		},
+	veterans, err := veteran.Init("internal/testdata/veterans.json")
+	if err != nil {
+		panic(fmt.Errorf("ahh no veterans: %w", err))
 	}
-	veteranWidget := NewVeteranWidget(dataStore, veteran)
+
+	veteranWidget := NewVeteranWidget(dataStore, veterans.Get(137))
 	return veteranWidget
 }
 
