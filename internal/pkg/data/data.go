@@ -4,7 +4,6 @@ package data
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/cicadaclock/umango/internal/pkg/db"
 )
@@ -74,12 +73,23 @@ func Init() (*DataStore, error) {
 func (dataStore *DataStore) MapFactorNames(ids []int) []string {
 	result := make([]string, 0, len(ids))
 	for _, id := range ids {
-		var level strings.Builder
-		level.WriteString(" ")
-		for range id % 100 {
-			_, _ = level.WriteString("★")
-		}
-		result = append(result, dataStore.FactorNames[id]+level.String())
+		result = append(result, dataStore.FactorNames[id])
+	}
+	return result
+}
+
+func (dataStore *DataStore) MapFactorTypes(ids []int) []int {
+	result := make([]int, 0, len(ids))
+	for _, id := range ids {
+		result = append(result, dataStore.FactorType[id])
+	}
+	return result
+}
+
+func (dataStore *DataStore) FactorLevels(ids []int) []int {
+	result := make([]int, 0, len(ids))
+	for _, id := range ids {
+		result = append(result, id%100)
 	}
 	return result
 }
@@ -100,19 +110,4 @@ func (dataStore *DataStore) MapVeteranCardIdToCharaName(veteranCardIds []int) []
 		names = append(names, charaName)
 	}
 	return names
-}
-
-// Internal ID for distinguishing between different factor types
-type FactorType int
-
-const (
-	FactorTypeBlue  FactorType = 1
-	FactorTypeRed   FactorType = 2
-	FactorTypeGreen FactorType = 3
-	FactorTypeWhite FactorType = 4
-	FactorTypeRace  FactorType = 5
-)
-
-func (ft FactorType) Int() int {
-	return int(ft)
 }

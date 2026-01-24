@@ -8,6 +8,8 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
 	"github.com/cicadaclock/umango/internal/pkg/data"
+	"github.com/cicadaclock/umango/internal/pkg/ui/app_theme"
+	"github.com/cicadaclock/umango/internal/pkg/ui/veteranwidget"
 	"github.com/cicadaclock/umango/internal/pkg/veteran"
 )
 
@@ -20,7 +22,7 @@ func App(dataStore *data.DataStore) {
 	a := app.New()
 	// Use a custom theme that returns the default theme
 	// if I need to override the defaults at any point.
-	a.Settings().SetTheme(&myTheme{})
+	a.Settings().SetTheme(&app_theme.AppTheme{})
 	window := a.NewWindow("Umango")
 	window.Resize(windowSize)
 
@@ -39,13 +41,13 @@ func mainMenu(dataStore *data.DataStore) *fyne.Container {
 	return c
 }
 
-func temp(dataStore *data.DataStore) *VeteranWidget {
-	veterans, err := veteran.Init("internal/testdata/veterans.json")
+func temp(dataStore *data.DataStore) *veteranwidget.VeteranWidget {
+	v, err := veteran.Init("internal/testdata/veterans.json")
 	if err != nil {
 		panic(fmt.Errorf("ahh no veterans: %w", err))
 	}
 
-	veteranWidget := NewVeteranWidget(dataStore, veterans.Get(137))
+	veteranWidget := veteranwidget.NewVeteranWidget(v, dataStore)
 	return veteranWidget
 }
 

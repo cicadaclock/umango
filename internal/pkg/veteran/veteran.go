@@ -9,23 +9,6 @@ import (
 	"github.com/ichiban/soa"
 )
 
-const (
-	// Main Legacy
-	LegacyNameMain LegacyName = 0
-	// Left side legacy parent
-	LegacyNameParentL LegacyName = 10
-	// Left side legacy grandparent 1
-	LegacyNameGrandparentL1 LegacyName = 11
-	// Left side legacy grandparent 2
-	LegacyNameGrandparentL2 LegacyName = 12
-	// Right side legacy
-	LegacyNameParentR LegacyName = 20
-	// Right side legacy grandparent 1
-	LegacyNameGrandparentR1 LegacyName = 21
-	// Right side legacy grandparent 2
-	LegacyNameGrandparentR2 LegacyName = 22
-)
-
 //go:generate go tool soagen
 type Veteran struct {
 	// Metadata
@@ -78,16 +61,6 @@ func Init(path string) (*VeteranSlice, error) {
 	return &veteranSlice, nil
 }
 
-// Returns an array of factors for a given legacy
-func (v *Veteran) LegacyFactor(l LegacyName) []int {
-	for _, successionChara := range v.SuccessionCharaArray {
-		if successionChara.PositionId == l.Int() {
-			return successionChara.FactorIdArray
-		}
-	}
-	return []int{}
-}
-
 func loadVeterans(path string) ([]Veteran, error) {
 	file, err := os.ReadFile(path)
 	if err != nil {
@@ -99,12 +72,4 @@ func loadVeterans(path string) ([]Veteran, error) {
 		return nil, fmt.Errorf("unmarshal: %w", err)
 	}
 	return veteranList, nil
-}
-
-// Internal ID for distinguishing between different legacy umas
-type LegacyName int
-
-// Returns the integer representation of the legacy name
-func (l LegacyName) Int() int {
-	return int(l)
 }
