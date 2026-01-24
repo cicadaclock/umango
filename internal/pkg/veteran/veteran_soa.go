@@ -6,6 +6,7 @@ import (
 )
 
 type VeteranSlice struct {
+	LocalVeteranId       []int
 	CardId               []int
 	CreateTime           []string
 	RankScore            []int
@@ -22,6 +23,7 @@ type VeteranSlice struct {
 
 func (s VeteranSlice) Get(i int) Veteran {
 	var t Veteran
+	t.LocalVeteranId = s.LocalVeteranId[i]
 	t.CardId = s.CardId[i]
 	t.CreateTime = s.CreateTime[i]
 	t.RankScore = s.RankScore[i]
@@ -38,6 +40,7 @@ func (s VeteranSlice) Get(i int) Veteran {
 }
 
 func (s VeteranSlice) Set(i int, t Veteran) {
+	s.LocalVeteranId[i] = t.LocalVeteranId
 	s.CardId[i] = t.CardId
 	s.CreateTime[i] = t.CreateTime
 	s.RankScore[i] = t.RankScore
@@ -54,6 +57,7 @@ func (s VeteranSlice) Set(i int, t Veteran) {
 
 func (s VeteranSlice) Len() int {
 	return min(
+		len(s.LocalVeteranId),
 		len(s.CardId),
 		len(s.CreateTime),
 		len(s.RankScore),
@@ -71,6 +75,7 @@ func (s VeteranSlice) Len() int {
 
 func (s VeteranSlice) Cap() int {
 	return min(
+		cap(s.LocalVeteranId),
 		cap(s.CardId),
 		cap(s.CreateTime),
 		cap(s.RankScore),
@@ -88,6 +93,7 @@ func (s VeteranSlice) Cap() int {
 
 func (s VeteranSlice) Slice(low, high, max int) VeteranSlice {
 	return VeteranSlice{
+		LocalVeteranId:       s.LocalVeteranId[low:high:max],
 		CardId:               s.CardId[low:high:max],
 		CreateTime:           s.CreateTime[low:high:max],
 		RankScore:            s.RankScore[low:high:max],
@@ -105,6 +111,7 @@ func (s VeteranSlice) Slice(low, high, max int) VeteranSlice {
 
 func (s VeteranSlice) Grow(n int) VeteranSlice {
 	return VeteranSlice{
+		LocalVeteranId:       slices.Grow(s.LocalVeteranId, n),
 		CardId:               slices.Grow(s.CardId, n),
 		CreateTime:           slices.Grow(s.CreateTime, n),
 		RankScore:            slices.Grow(s.RankScore, n),
