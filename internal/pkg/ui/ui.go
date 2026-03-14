@@ -9,6 +9,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 	"github.com/cicadaclock/umango/internal/pkg/data"
 	"github.com/cicadaclock/umango/internal/pkg/ui/app_theme"
+	centersteppedlayout "github.com/cicadaclock/umango/internal/pkg/ui/center_stepped_layout"
 	"github.com/cicadaclock/umango/internal/pkg/ui/veteranwidget"
 	"github.com/cicadaclock/umango/internal/pkg/veteran"
 )
@@ -41,14 +42,14 @@ func mainMenu(dataStore *data.DataStore) *fyne.Container {
 	return c
 }
 
-func temp(dataStore *data.DataStore) *veteranwidget.VeteranWidget {
+func temp(dataStore *data.DataStore) *fyne.Container {
 	v, err := veteran.Init("internal/testdata/veterans.json")
 	if err != nil {
 		panic(fmt.Errorf("ahh no veterans: %w", err))
 	}
 
 	veteranWidget := veteranwidget.NewVeteranWidget(v, dataStore)
-	return veteranWidget
+	return centersteppedlayout.NewHStepped(0.6, 0.8, veteranWidget)
 }
 
 func createTable() *ColumnGrid {
