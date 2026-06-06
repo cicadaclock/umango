@@ -83,15 +83,12 @@ func NewFactorWidgetWithStyle(
 		BottomPadding: bottomPadding,
 		LeftPadding:   leftPadding,
 		RightPadding:  rightPadding,
-		redFactors:    container.NewHBox(),
-		greenFactors:  container.NewHBox(),
-		blueFactors:   container.NewHBox(),
+		redFactors:    container.New(layout.NewRowWrapLayout()),
+		greenFactors:  container.New(layout.NewRowWrapLayout()),
+		blueFactors:   container.New(layout.NewRowWrapLayout()),
 		whiteFactors:  container.New(layout.NewRowWrapLayout()),
 		raceFactors:   container.New(layout.NewRowWrapLayout()),
 	}
-	// rgbContainer := container.NewVBox(f.blueFactors, f.redFactors, f.greenFactors)
-	// wContainer := container.NewVBox(f.raceFactors, f.whiteFactors)
-	// f.Content = container.NewBorder(rgbContainer, nil, nil, nil, wContainer)
 	f.Content = container.NewVBox(f.blueFactors, f.redFactors, f.greenFactors, f.raceFactors, f.whiteFactors)
 
 	// For the empty case, we append a single empty rich text widget for all
