@@ -39,15 +39,12 @@ func NewVeteranWidget(
 			return veteranSlice.Len()
 		},
 		func() fyne.CanvasObject {
-			// widget := factor_widget.NewFactorWidget(dataStore, 0, []int{}, []int{}, []int{})
-			// return container.NewVBox(widget.Content)
-			return container.NewVBox()
+			return container.NewWithoutLayout()
 		},
 		func(i widget.ListItemID, co fyne.CanvasObject) {
 			c := co.(*fyne.Container)
 			c.RemoveAll()
 			c.Add(v.widgets[i].Content)
-			c.Resize(v.widgets[i].MinSize())
 		},
 	)
 	v.ExtendBaseWidget(v)
