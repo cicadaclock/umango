@@ -1,6 +1,8 @@
 package veteranwidget
 
 import (
+	"fmt"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
@@ -24,11 +26,10 @@ type VeteranWidget struct {
 }
 
 func NewVeteranWidget(
-	veteranSlice *veteran.VeteranSlice,
 	dataStore *data.DataStore,
 ) *VeteranWidget {
 	v := &VeteranWidget{
-		VeteranSlice: veteranSlice,
+		VeteranSlice: &veteran.VeteranSlice{},
 		dataStore:    dataStore,
 	}
 
@@ -36,7 +37,7 @@ func NewVeteranWidget(
 
 	v.list = widget.NewList(
 		func() int {
-			return veteranSlice.Len()
+			return v.VeteranSlice.Len()
 		},
 		func() fyne.CanvasObject {
 			return container.NewWithoutLayout()
@@ -61,6 +62,20 @@ func (v *VeteranWidget) Resize(size fyne.Size) {
 
 func (v *VeteranWidget) CreateRenderer() fyne.WidgetRenderer {
 	return widget.NewSimpleRenderer(v.list)
+}
+
+func (v *VeteranWidget) Load() error {
+	vs, err := veteran.Init(v.dataStore.VeteransJsonFilePath)
+	if err != nil {
+		return fmt.Errorf("load veterans: %w", err)
+	}
+	v.VeteranSlice = vs
+	for _, w := range v.widgets {
+		w.Content.RemoveAll()
+	}
+	v.addFactorWidgets()
+	v.list.Refresh()
+	return nil
 }
 
 func (v *VeteranWidget) addFactorWidgets() {

@@ -50,6 +50,10 @@ type SuccessionChara struct {
 }
 
 func Init(path string) (*VeteranSlice, error) {
+	if path == "" {
+		return nil, fmt.Errorf("empty path")
+	}
+
 	veterans, err := loadVeterans(path)
 	if err != nil {
 		return nil, fmt.Errorf("load veteran list: %w", err)

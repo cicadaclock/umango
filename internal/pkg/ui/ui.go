@@ -1,21 +1,19 @@
 package ui
 
 import (
-	"fmt"
-
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 	"github.com/cicadaclock/umango/internal/pkg/data"
 	"github.com/cicadaclock/umango/internal/pkg/ui/app_theme"
 	centersteppedlayout "github.com/cicadaclock/umango/internal/pkg/ui/center_stepped_layout"
 	"github.com/cicadaclock/umango/internal/pkg/ui/veteranwidget"
-	"github.com/cicadaclock/umango/internal/pkg/veteran"
 )
 
 var (
-	windowWidth, windowHeight float32 = 640, 360
+	windowWidth, windowHeight float32 = 1280, 720
 	windowSize                        = fyne.NewSize(windowWidth, windowHeight)
 )
 
@@ -27,29 +25,47 @@ func App(dataStore *data.DataStore) {
 	window := a.NewWindow("Umango")
 	window.Resize(windowSize)
 
-	window.SetContent(mainMenu(dataStore))
+	window.SetContent(mainMenu(dataStore, window))
 	window.ShowAndRun()
 }
 
-func mainMenu(dataStore *data.DataStore) *fyne.Container {
+func mainMenu(dataStore *data.DataStore, window fyne.Window) *fyne.Container {
 	tabs := container.NewAppTabs(
 		container.NewTabItem("Veterans", createTable()),
 		container.NewTabItem("Optimizer", defaultWidget()),
-		container.NewTabItem("Temp", temp(dataStore)),
+		container.NewTabItem("Temp", temp(dataStore, window)),
 	)
 	tabs.SetTabLocation(container.TabLocationTop)
 	c := container.NewStack(tabs)
 	return c
 }
 
-func temp(dataStore *data.DataStore) *fyne.Container {
-	v, err := veteran.Init("internal/testdata/veterans.json")
-	if err != nil {
-		panic(fmt.Errorf("ahh no veterans: %w", err))
-	}
-
-	veteranWidget := veteranwidget.NewVeteranWidget(v, dataStore)
-	return centersteppedlayout.NewHStepped(0.6, 0.8, veteranWidget)
+func temp(dataStore *data.DataStore, window fyne.Window) *fyne.Container {
+	veteranWidget := veteranwidget.NewVeteranWidget(dataStore)
+	content := centersteppedlayout.NewHStepped(0.6, 0.8, veteranWidget)
+	veteranFileDialog := dialog.NewFileOpen(
+		func(reader fyne.URIReadCloser, err error) {
+			if err != nil {
+				dialog.ShowError(err, window)
+			}
+			if reader != nil {
+				defer reader.Close()
+				dataStore.VeteransJsonFilePath = reader.URI().Path()
+				veteranWidget.Load()
+				content.Refresh()
+			}
+		},
+		window,
+	)
+	loadVeteranButton := widget.NewButton("Load",
+		func() {
+			veteranFileDialog.Resize(fyne.NewSize(500, 500))
+			veteranFileDialog.Show()
+		},
+	)
+	header := container.NewHBox(loadVeteranButton)
+	main := container.NewBorder(header, nil, nil, nil, content)
+	return main
 }
 
 func createTable() *ColumnGrid {
