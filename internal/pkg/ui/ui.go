@@ -1,6 +1,9 @@
 package ui
 
 import (
+	"embed"
+	"fmt"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
@@ -17,16 +20,21 @@ var (
 	windowSize                        = fyne.NewSize(windowWidth, windowHeight)
 )
 
-func App(dataStore *data.DataStore) {
+func App(assets embed.FS, dataStore *data.DataStore) error {
 	a := app.New()
 	// Use a custom theme that returns the default theme
 	// if I need to override the defaults at any point.
-	a.Settings().SetTheme(&app_theme.AppTheme{})
+	font, err := assets.ReadFile("assets/font/Inter-VariableFont_opsz,wght.ttf")
+	if err != nil {
+		return fmt.Errorf("read assets: %w", err)
+	}
+	a.Settings().SetTheme(app_theme.NewAppTheme(font))
 	window := a.NewWindow("Umango")
 	window.Resize(windowSize)
 
 	window.SetContent(mainMenu(dataStore, window))
 	window.ShowAndRun()
+	return nil
 }
 
 func mainMenu(dataStore *data.DataStore, window fyne.Window) *fyne.Container {

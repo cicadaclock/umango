@@ -31,9 +31,17 @@ var (
 	colorBackground       = color.NRGBA{R: 0xdd, G: 0xdd, B: 0xdd, A: 0xff}
 )
 
-type AppTheme struct{}
+type AppTheme struct {
+	DefaultFont []byte
+}
 
 var _ fyne.Theme = (*AppTheme)(nil)
+
+func NewAppTheme(defaultFont []byte) AppTheme {
+	return AppTheme{
+		DefaultFont: defaultFont,
+	}
+}
 
 func (m AppTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) color.Color {
 	switch name {
@@ -62,7 +70,7 @@ func (m AppTheme) Icon(name fyne.ThemeIconName) fyne.Resource {
 }
 
 func (m AppTheme) Font(style fyne.TextStyle) fyne.Resource {
-	font, _ := fyne.LoadResourceFromPath("internal/font/Inter-VariableFont_opsz,wght.ttf")
+	font := fyne.NewStaticResource("defaultFont", m.DefaultFont)
 	return font
 }
 
