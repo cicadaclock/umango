@@ -1,10 +1,16 @@
 package main
 
 import (
+	"embed"
 	"log"
 
 	"github.com/cicadaclock/umango/internal/pkg/data"
 	"github.com/cicadaclock/umango/internal/pkg/ui"
+)
+
+var (
+	//go:embed assets/*
+	assets embed.FS
 )
 
 func main() {
@@ -13,5 +19,8 @@ func main() {
 		log.Fatalf("error loading data store: %v", err)
 	}
 
-	ui.App(dataStore)
+	err = ui.App(assets, dataStore)
+	if err != nil {
+		log.Fatalf("fatal error occurred: %v", err)
+	}
 }
