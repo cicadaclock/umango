@@ -1,4 +1,4 @@
-package affinity
+package veteran
 
 import (
 	"fmt"
@@ -29,17 +29,17 @@ func (legacy Legacy) Print(dataStore *data.DataStore) {
 
 func (legacy Legacy) Affinity(dataStore *data.DataStore) int {
 	sum := 0
-	sum += calculateDuoAffinity(dataStore, legacy.CharaId00, legacy.CharaId10)
-	sum += calculateDuoAffinity(dataStore, legacy.CharaId00, legacy.CharaId20)
-	sum += calculateDuoAffinity(dataStore, legacy.CharaId10, legacy.CharaId20)
-	sum += calculateTrioAffinity(dataStore, legacy.CharaId00, legacy.CharaId10, legacy.CharaId11)
-	sum += calculateTrioAffinity(dataStore, legacy.CharaId00, legacy.CharaId10, legacy.CharaId12)
-	sum += calculateTrioAffinity(dataStore, legacy.CharaId00, legacy.CharaId20, legacy.CharaId21)
-	sum += calculateTrioAffinity(dataStore, legacy.CharaId00, legacy.CharaId20, legacy.CharaId22)
+	sum += calculateDuoBaseAffinity(dataStore, legacy.CharaId00, legacy.CharaId10)
+	sum += calculateDuoBaseAffinity(dataStore, legacy.CharaId00, legacy.CharaId20)
+	sum += calculateDuoBaseAffinity(dataStore, legacy.CharaId10, legacy.CharaId20)
+	sum += calculateTrioBaseAffinity(dataStore, legacy.CharaId00, legacy.CharaId10, legacy.CharaId11)
+	sum += calculateTrioBaseAffinity(dataStore, legacy.CharaId00, legacy.CharaId10, legacy.CharaId12)
+	sum += calculateTrioBaseAffinity(dataStore, legacy.CharaId00, legacy.CharaId20, legacy.CharaId21)
+	sum += calculateTrioBaseAffinity(dataStore, legacy.CharaId00, legacy.CharaId20, legacy.CharaId22)
 	return sum
 }
 
-func sumAffinity(dataStore *data.DataStore, relationIds []int) int {
+func sumRelationAffinity(dataStore *data.DataStore, relationIds []int) int {
 	var sum int = 0
 	for _, relationId := range relationIds {
 		sum += (*dataStore).SuccessionRelations[relationId]
@@ -47,7 +47,7 @@ func sumAffinity(dataStore *data.DataStore, relationIds []int) int {
 	return sum
 }
 
-func calculateDuoAffinity(dataStore *data.DataStore, charaId1, charaId2 int) int {
+func calculateDuoBaseAffinity(dataStore *data.DataStore, charaId1, charaId2 int) int {
 	if charaId1 == charaId2 {
 		return 0
 	}
@@ -55,10 +55,10 @@ func calculateDuoAffinity(dataStore *data.DataStore, charaId1, charaId2 int) int
 	relationIds_a := (*dataStore).SuccessionRelationMembers[charaId1]
 	relationIds_b := (*dataStore).SuccessionRelationMembers[charaId2]
 	matchedRelationIds := matchRelationIds(relationIds_a, relationIds_b)
-	return sumAffinity(dataStore, matchedRelationIds)
+	return sumRelationAffinity(dataStore, matchedRelationIds)
 }
 
-func calculateTrioAffinity(dataStore *data.DataStore, charaId1, charaId2, charaId3 int) int {
+func calculateTrioBaseAffinity(dataStore *data.DataStore, charaId1, charaId2, charaId3 int) int {
 	if charaId1 == charaId2 || charaId1 == charaId3 || charaId2 == charaId3 {
 		return 0
 	}
@@ -66,7 +66,7 @@ func calculateTrioAffinity(dataStore *data.DataStore, charaId1, charaId2, charaI
 	relationIds_b := (*dataStore).SuccessionRelationMembers[charaId2]
 	relationIds_c := (*dataStore).SuccessionRelationMembers[charaId3]
 	matchedRelationIds := matchRelationIds(relationIds_a, relationIds_b, relationIds_c)
-	return sumAffinity(dataStore, matchedRelationIds)
+	return sumRelationAffinity(dataStore, matchedRelationIds)
 }
 
 func matchRelationIds(relationIdsArgs ...[]int) []int {
@@ -85,4 +85,35 @@ func matchRelationIds(relationIdsArgs ...[]int) []int {
 		}
 	}
 	return relationIds
+}
+
+func calculateRaceAffinity(winSaddle1, winSaddle2, winSaddle3 []int) int {
+	i := 0
+	j := 0
+	sum := 0
+	for _, id := range winSaddle1 {
+		for i < len(winSaddle2) {
+			if winSaddle2[i] == id {
+				sum++
+				i++
+			} else if winSaddle2[i] < id {
+				i++
+				continue
+			} else if winSaddle2[i] > id {
+				break
+			}
+		}
+		for j < len(winSaddle3) {
+			if winSaddle3[j] == id {
+				sum++
+				j++
+			} else if winSaddle3[j] < id {
+				j++
+				continue
+			} else if winSaddle3[j] > id {
+				break
+			}
+		}
+	}
+	return sum
 }
