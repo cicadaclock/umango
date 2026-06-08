@@ -1,4 +1,4 @@
-package affinity
+package veteran
 
 import (
 	"testing"
@@ -80,5 +80,15 @@ func TestLegacyAffinityForEmptyParent(t *testing.T) {
 	affinity := legacy.Affinity(dataStore)
 	if affinity != 0 {
 		t.Errorf("Legacy %v == %d", legacy, affinity)
+	}
+}
+
+func TestRaceAffinity(t *testing.T) {
+	parent := []int{1, 2, 5, 10, 11, 12, 13, 15, 16, 17, 18, 23, 25, 26, 27, 34, 63, 145, 146, 147}
+	grandparent1 := []int{4, 5, 6, 10, 13, 14, 15, 17, 23, 26, 27, 61, 122, 130}
+	grandparent2 := []int{2, 6, 7, 10, 11, 14, 15, 17, 18, 21, 23, 25, 26, 29, 32, 34, 35, 39, 65, 85}
+	affinity := calculateRaceAffinity(parent, grandparent1, grandparent2)
+	if affinity != 18 {
+		t.Errorf("Affinity == %d, want 18", affinity)
 	}
 }
