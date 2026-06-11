@@ -6,91 +6,115 @@ import (
 	"github.com/cicadaclock/umango/internal/pkg/data"
 )
 
-// Uma representation of a full affinity tree
-type Legacy struct {
-	CharaId00 int
-	CharaId10 int
-	CharaId11 int
-	CharaId12 int
-	CharaId20 int
-	CharaId21 int
-	CharaId22 int
-
-	BaseAffinity int
-	RaceAffinity int
+// Single uma in the legacy tree
+type Member struct {
+	// Chara ID of this uma
+	CharaId int
+	// Race IDs this uma placed 1st in
+	WinSaddleIds []int
 }
 
-func NewLegacy(v Veteran, dataStore *data.DataStore) Legacy {
-	legacy := Legacy{}
+// Single veteran with its own two parents (trainee's grandparents)
+type Parent struct {
+	Member
+	GrandParent1 Member
+	GrandParent2 Member
+}
+
+// Uma representation of a full affinity tree:
+// trainee plus two inherited parents
+type Legacy struct {
+	TraineeCharaId int
+	Parent1        Parent
+	Parent2        Parent
+}
+
+func NewLegacy(traineeCharaId int, parent1, parent2 Veteran, dataStore *data.DataStore) Legacy {
+	return Legacy{
+		TraineeCharaId: traineeCharaId,
+		Parent1:        NewParent(parent1, dataStore),
+		Parent2:        NewParent(parent2, dataStore),
+	}
+}
+
+func NewParent(v Veteran, dataStore *data.DataStore) Parent {
+	parent := Parent{Member: newMember(v.CardId, v.WinSaddleIdArray, dataStore)}
 	for _, chara := range v.SuccessionCharaArray {
 		switch chara.PositionId {
 		case 10:
-			legacy.CharaId10 = dataStore.MapVeteranCardIdToCharaId([]int{v.CardId})[0]
-		case 11:
-			legacy.CharaId11 = dataStore.MapVeteranCardIdToCharaId([]int{v.CardId})[0]
-		case 12:
-			legacy.CharaId12 = dataStore.MapVeteranCardIdToCharaId([]int{v.CardId})[0]
+			parent.GrandParent1 = newMember(chara.CardId, chara.WinSaddleIdArray, dataStore)
 		case 20:
-			legacy.CharaId20 = dataStore.MapVeteranCardIdToCharaId([]int{v.CardId})[0]
-		case 21:
-			legacy.CharaId21 = dataStore.MapVeteranCardIdToCharaId([]int{v.CardId})[0]
-		case 22:
-			legacy.CharaId22 = dataStore.MapVeteranCardIdToCharaId([]int{v.CardId})[0]
+			parent.GrandParent2 = newMember(chara.CardId, chara.WinSaddleIdArray, dataStore)
 		}
 	}
-	return legacy
+	return parent
+}
+
+func newMember(cardId int, winSaddleIds []int, dataStore *data.DataStore) Member {
+	return Member{
+		CharaId:      dataStore.CardData[cardId],
+		WinSaddleIds: winSaddleIds,
+	}
 }
 
 func (legacy Legacy) Print(dataStore *data.DataStore) {
-	fmt.Println((*dataStore).CharaNames[legacy.CharaId00])
-	fmt.Println("├──", (*dataStore).CharaNames[legacy.CharaId10])
-	fmt.Println("│   ├──", (*dataStore).CharaNames[legacy.CharaId11])
-	fmt.Println("│   └──", (*dataStore).CharaNames[legacy.CharaId12])
-	fmt.Println("└──", (*dataStore).CharaNames[legacy.CharaId20])
-	fmt.Println("    ├──", (*dataStore).CharaNames[legacy.CharaId21])
-	fmt.Println("    └──", (*dataStore).CharaNames[legacy.CharaId22])
+	fmt.Println(dataStore.CharaNames[legacy.TraineeCharaId])
+	fmt.Println("├──", dataStore.CharaNames[legacy.Parent1.CharaId])
+	fmt.Println("│   ├──", dataStore.CharaNames[legacy.Parent1.GrandParent1.CharaId])
+	fmt.Println("│   └──", dataStore.CharaNames[legacy.Parent1.GrandParent2.CharaId])
+	fmt.Println("└──", dataStore.CharaNames[legacy.Parent2.CharaId])
+	fmt.Println("    ├──", dataStore.CharaNames[legacy.Parent2.GrandParent1.CharaId])
+	fmt.Println("    └──", dataStore.CharaNames[legacy.Parent2.GrandParent2.CharaId])
 }
 
+// Total affinity score: base affinity + race affinity
 func (legacy Legacy) Affinity(dataStore *data.DataStore) int {
-	sum := 0
-	sum += calculateDuoBaseAffinity(dataStore, legacy.CharaId00, legacy.CharaId10)
-	sum += calculateDuoBaseAffinity(dataStore, legacy.CharaId00, legacy.CharaId20)
-	sum += calculateDuoBaseAffinity(dataStore, legacy.CharaId10, legacy.CharaId20)
-	sum += calculateTrioBaseAffinity(dataStore, legacy.CharaId00, legacy.CharaId10, legacy.CharaId11)
-	sum += calculateTrioBaseAffinity(dataStore, legacy.CharaId00, legacy.CharaId10, legacy.CharaId12)
-	sum += calculateTrioBaseAffinity(dataStore, legacy.CharaId00, legacy.CharaId20, legacy.CharaId21)
-	sum += calculateTrioBaseAffinity(dataStore, legacy.CharaId00, legacy.CharaId20, legacy.CharaId22)
-	return sum
+	return legacy.BaseAffinity(dataStore) + legacy.RaceAffinity()
+}
+
+// Affinity from base umas
+func (legacy Legacy) BaseAffinity(dataStore *data.DataStore) int {
+	return legacy.Parent1.baseAffinity(dataStore, legacy.TraineeCharaId) +
+		legacy.Parent2.baseAffinity(dataStore, legacy.TraineeCharaId) +
+		relationAffinity(dataStore, legacy.Parent1.CharaId, legacy.Parent2.CharaId)
+}
+
+func (parent Parent) baseAffinity(dataStore *data.DataStore, traineeCharaId int) int {
+	return relationAffinity(dataStore, traineeCharaId, parent.CharaId) +
+		relationAffinity(dataStore, traineeCharaId, parent.CharaId, parent.GrandParent1.CharaId) +
+		relationAffinity(dataStore, traineeCharaId, parent.CharaId, parent.GrandParent2.CharaId)
+}
+
+// Affinity from races won by both parents and their grandparents
+func (legacy Legacy) RaceAffinity() int {
+	return legacy.Parent1.raceAffinity() + legacy.Parent2.raceAffinity()
+}
+
+func (parent Parent) raceAffinity() int {
+	return calculateRaceAffinity(parent.WinSaddleIds, parent.GrandParent1.WinSaddleIds, parent.GrandParent2.WinSaddleIds)
+}
+
+// Sums the affinity of every succession relation shared by all of the given
+// charas
+func relationAffinity(dataStore *data.DataStore, charaIds ...int) int {
+	relationIdsPerChara := make([][]int, len(charaIds))
+	for i, charaId := range charaIds {
+		for _, prev := range charaIds[:i] {
+			if charaId == prev {
+				return 0
+			}
+		}
+		relationIdsPerChara[i] = dataStore.SuccessionRelationMembers[charaId]
+	}
+	return sumRelationAffinity(dataStore, matchRelationIds(relationIdsPerChara...))
 }
 
 func sumRelationAffinity(dataStore *data.DataStore, relationIds []int) int {
 	var sum int = 0
 	for _, relationId := range relationIds {
-		sum += (*dataStore).SuccessionRelations[relationId]
+		sum += dataStore.SuccessionRelations[relationId]
 	}
 	return sum
-}
-
-func calculateDuoBaseAffinity(dataStore *data.DataStore, charaId1, charaId2 int) int {
-	if charaId1 == charaId2 {
-		return 0
-	}
-
-	relationIds_a := (*dataStore).SuccessionRelationMembers[charaId1]
-	relationIds_b := (*dataStore).SuccessionRelationMembers[charaId2]
-	matchedRelationIds := matchRelationIds(relationIds_a, relationIds_b)
-	return sumRelationAffinity(dataStore, matchedRelationIds)
-}
-
-func calculateTrioBaseAffinity(dataStore *data.DataStore, charaId1, charaId2, charaId3 int) int {
-	if charaId1 == charaId2 || charaId1 == charaId3 || charaId2 == charaId3 {
-		return 0
-	}
-	relationIds_a := (*dataStore).SuccessionRelationMembers[charaId1]
-	relationIds_b := (*dataStore).SuccessionRelationMembers[charaId2]
-	relationIds_c := (*dataStore).SuccessionRelationMembers[charaId3]
-	matchedRelationIds := matchRelationIds(relationIds_a, relationIds_b, relationIds_c)
-	return sumRelationAffinity(dataStore, matchedRelationIds)
 }
 
 func matchRelationIds(relationIdsArgs ...[]int) []int {
@@ -111,7 +135,10 @@ func matchRelationIds(relationIdsArgs ...[]int) []int {
 	return relationIds
 }
 
+// Counts races shared between winSaddle1 and each other list
+// WinSaddle must be sorted in ascending order
 func calculateRaceAffinity(winSaddle1, winSaddle2, winSaddle3 []int) int {
+	// TODO: Maybe assert winSaddle in ascending order?
 	i := 0
 	j := 0
 	sum := 0
