@@ -15,10 +15,13 @@ type DataStore struct {
 	SuccessionRelationMembers map[int][]int
 	FactorType                map[int]int
 
-	// Text mapping
-	FactorNames   map[int]string
+	// Text mappings
+	// Factor ID to factor name
+	FactorNames map[int]string
+	// Veteran card ID to full chara title + name
 	VeteranCardId map[int]string
-	CharaNames    map[int]string
+	// Veteran card ID to chara name
+	CharaNames map[int]string
 
 	VeteransJsonFilePath string
 }
@@ -72,6 +75,7 @@ func Init() (*DataStore, error) {
 	return &dataStore, nil
 }
 
+// Maps factor ID to factor name
 func (dataStore *DataStore) MapFactorNames(ids []int) []string {
 	result := make([]string, 0, len(ids))
 	for _, id := range ids {
@@ -80,6 +84,7 @@ func (dataStore *DataStore) MapFactorNames(ids []int) []string {
 	return result
 }
 
+// Maps factor ID to factor type (r/g/b/race/white)
 func (dataStore *DataStore) MapFactorTypes(ids []int) []int {
 	result := make([]int, 0, len(ids))
 	for _, id := range ids {
@@ -88,6 +93,7 @@ func (dataStore *DataStore) MapFactorTypes(ids []int) []int {
 	return result
 }
 
+// Maps factor ID to factor level
 func (dataStore *DataStore) FactorLevels(ids []int) []int {
 	result := make([]int, 0, len(ids))
 	for _, id := range ids {
@@ -96,7 +102,8 @@ func (dataStore *DataStore) FactorLevels(ids []int) []int {
 	return result
 }
 
-func (dataStore *DataStore) MapVeteranCardIdName(veteranCardIds []int) []string {
+// Maps veteran card ID to chara title. Example: "[Title] Name"
+func (dataStore *DataStore) MapVeteranCardIdToCharaTitle(veteranCardIds []int) []string {
 	names := make([]string, 0, len(veteranCardIds))
 	for _, id := range veteranCardIds {
 		names = append(names, dataStore.VeteranCardId[id])
@@ -104,6 +111,17 @@ func (dataStore *DataStore) MapVeteranCardIdName(veteranCardIds []int) []string 
 	return names
 }
 
+// Maps veteran card ID to chara id
+func (dataStore *DataStore) MapVeteranCardIdToCharaId(veteranCardIds []int) []int {
+	ids := make([]int, 0, len(veteranCardIds))
+	for _, id := range veteranCardIds {
+		charaId := dataStore.CardData[id]
+		ids = append(ids, charaId)
+	}
+	return ids
+}
+
+// Maps veteran card ID to chara name. Example: "Name"
 func (dataStore *DataStore) MapVeteranCardIdToCharaName(veteranCardIds []int) []string {
 	names := make([]string, 0, len(veteranCardIds))
 	for _, id := range veteranCardIds {

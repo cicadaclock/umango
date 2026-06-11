@@ -14,10 +14,11 @@ type Veteran struct {
 	// Metadata
 
 	// Veteran ID that is unique locally to your account
-	LocalVeteranId int    `json:"single_mode_chara_id"`
-	CardId         int    `json:"card_id"`
-	CreateTime     string `json:"create_time"`
-	RankScore      int    `json:"rank_score"`
+	LocalVeteranId int `json:"single_mode_chara_id"`
+	// Veteran card ID that determines the chara
+	CardId     int    `json:"card_id"`
+	CreateTime string `json:"create_time"`
+	RankScore  int    `json:"rank_score"`
 	// Sparks
 	FactorIdArray []int `json:"factor_id_array"`
 
@@ -41,6 +42,8 @@ type Veteran struct {
 
 // Legacy parent and grandparent
 type SuccessionChara struct {
+	// Veteran card ID that determines the chara
+	CardId int `json:"card_id"`
 	// Sparks
 	FactorIdArray []int `json:"factor_id_array"`
 	// Races placed 1st in

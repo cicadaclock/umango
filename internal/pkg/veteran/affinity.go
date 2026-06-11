@@ -15,6 +15,30 @@ type Legacy struct {
 	CharaId20 int
 	CharaId21 int
 	CharaId22 int
+
+	BaseAffinity int
+	RaceAffinity int
+}
+
+func NewLegacy(v Veteran, dataStore *data.DataStore) Legacy {
+	legacy := Legacy{}
+	for _, chara := range v.SuccessionCharaArray {
+		switch chara.PositionId {
+		case 10:
+			legacy.CharaId10 = dataStore.MapVeteranCardIdToCharaId([]int{v.CardId})[0]
+		case 11:
+			legacy.CharaId11 = dataStore.MapVeteranCardIdToCharaId([]int{v.CardId})[0]
+		case 12:
+			legacy.CharaId12 = dataStore.MapVeteranCardIdToCharaId([]int{v.CardId})[0]
+		case 20:
+			legacy.CharaId20 = dataStore.MapVeteranCardIdToCharaId([]int{v.CardId})[0]
+		case 21:
+			legacy.CharaId21 = dataStore.MapVeteranCardIdToCharaId([]int{v.CardId})[0]
+		case 22:
+			legacy.CharaId22 = dataStore.MapVeteranCardIdToCharaId([]int{v.CardId})[0]
+		}
+	}
+	return legacy
 }
 
 func (legacy Legacy) Print(dataStore *data.DataStore) {
