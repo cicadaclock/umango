@@ -3,11 +3,15 @@ package ui
 import (
 	"embed"
 	"fmt"
+	"log"
+	"os"
+	"path/filepath"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/widget"
 	"github.com/cicadaclock/umango/internal/pkg/data"
 	"github.com/cicadaclock/umango/internal/pkg/ui/app_theme"
@@ -65,9 +69,19 @@ func temp(dataStore *data.DataStore, window fyne.Window) *fyne.Container {
 		},
 		window,
 	)
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		log.Fatalf("get home dir: %v", err)
+	}
+	dir := storage.NewFileURI(filepath.Join(homeDir, "Documents", "Saved races"))
+	listDir, err := storage.ListerForURI(dir)
+	if err != nil {
+		log.Fatalf("lister home dir uri: %v", err)
+	}
+	veteranFileDialog.SetLocation(listDir)
+	veteranFileDialog.Resize(fyne.NewSize(500, 500))
 	loadVeteranButton := widget.NewButton("Load",
 		func() {
-			veteranFileDialog.Resize(fyne.NewSize(500, 500))
 			veteranFileDialog.Show()
 		},
 	)
