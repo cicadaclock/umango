@@ -39,11 +39,11 @@ func TestLoadRaceResults(t *testing.T) {
 	if chara.TrainedCharaId != 2984 {
 		t.Errorf("TrainedCharaId == %d, want 2984", chara.TrainedCharaId)
 	}
-	if len(chara.ScoreArray) != 8 {
-		t.Fatalf("len(ScoreArray) == %d, want 8", len(chara.ScoreArray))
+	if len(chara.ScoreEventArray) != 8 {
+		t.Fatalf("len(ScoreArray) == %d, want 8", len(chara.ScoreEventArray))
 	}
-	if chara.ScoreArray[0].BonusArray[0].BonusScore != 5940 {
-		t.Errorf("BonusScore == %d, want 5940", chara.ScoreArray[0].BonusArray[0].BonusScore)
+	if chara.ScoreEventArray[0].BonusArray[0].Score != 5940 {
+		t.Errorf("BonusScore == %d, want 5940", chara.ScoreEventArray[0].BonusArray[0].Score)
 	}
 }
 
