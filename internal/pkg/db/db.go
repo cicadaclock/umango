@@ -15,6 +15,8 @@ const (
 	textDataCardId    = 4
 	textDataCharaName = 6
 	textDataFactors   = 147
+	textDataTTScore   = 140
+	textDataTTBonus   = 148
 )
 
 type DB struct {
