@@ -21,6 +21,8 @@ type Veteran struct {
 	RankScore  int    `json:"rank_score"`
 	// Sparks
 	FactorIdArray []int `json:"factor_id_array"`
+	// Skills
+	SkillArray []Skill `json:"skill_array"`
 
 	// Racing stats
 
@@ -38,6 +40,11 @@ type Veteran struct {
 	WinSaddleIdArray []int `json:"win_saddle_id_array"`
 	// Epithets
 	NicknameIdArray []int `json:"nickname_id_array"`
+}
+
+type Skill struct {
+	SkillId int `json:"skill_id"`
+	Level   int `json:"level"`
 }
 
 // Legacy parent and grandparent
