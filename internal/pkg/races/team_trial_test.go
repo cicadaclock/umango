@@ -27,24 +27,6 @@ func TestLoadRaceResults(t *testing.T) {
 	if len(round1.CharaResultArray) != 12 {
 		t.Fatalf("len(CharaResultArray) == %d, want 12", len(round1.CharaResultArray))
 	}
-
-	// Struct method for player's scored umas
-	scored := round1.ScoredCharas()
-	if len(scored) != 3 {
-		t.Fatalf("len(scored) == %d, want 3", len(scored))
-	}
-
-	// Different structs properly decode
-	chara := scored[0]
-	if chara.TrainedCharaId != 2984 {
-		t.Errorf("TrainedCharaId == %d, want 2984", chara.TrainedCharaId)
-	}
-	if len(chara.ScoreEventArray) != 8 {
-		t.Fatalf("len(ScoreArray) == %d, want 8", len(chara.ScoreEventArray))
-	}
-	if chara.ScoreEventArray[0].BonusArray[0].Score != 5940 {
-		t.Errorf("BonusScore == %d, want 5940", chara.ScoreEventArray[0].BonusArray[0].Score)
-	}
 }
 
 func TestLoadRaceResultsForEmptyPath(t *testing.T) {

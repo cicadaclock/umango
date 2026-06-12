@@ -8,45 +8,6 @@ import (
 	"path/filepath"
 )
 
-// Scores for a single distance
-type DistanceScoresGraph struct {
-	DistanceType int
-	// Total final score including any bonuses
-	FinalScores []int
-	BonusScores []int
-}
-
-// Scores for a single chara
-type CharaScoresGraph struct {
-	TrainedCharaId int
-	// Total final score
-	FinalScores []int
-	BonusScores []int
-
-	// Might condense these into a map using strings from text_data
-	// Scores awarded for placing 1st, 2nd, etc.
-	PlacementScores []int
-	// Scores awarded for 1st place distance to 2nd place
-	DistanceScores []int
-	// Scores awarded for unique skills
-	UniqueSkillScores []int
-	// Scores awarded for rare skills
-	RareSkillScores []int
-	// Scores awarded for normal skills
-	SkillScores []int
-	// Scores awarded for good positioning
-	GoodPositioningMidRaceScores  []int
-	GoodPositioningLateRaceScores []int
-	// Scores awarded for beating the course target time
-	TargetTimeScores []int
-	// Scores awarded for favorite position (long shot)
-	FavoritePositionScores []int
-	// Scores awarded for strong starts
-	StrongStartScores []int
-	// Scores subtracted for rushing
-	RushedScores []int
-}
-
 // Result of a single team trial round
 type RaceResult struct {
 	DistanceType int `json:"distance_type"`
@@ -79,7 +40,7 @@ type ScoreEvent struct {
 	RawScoreId int `json:"raw_score_id"`
 	// Number of times the scoring event occurred
 	Num int `json:"num"`
-	// Final score value for a given scoring event. Score = BonusScores + BaseScore
+	// Final score value for a given scoring event. Score = BonusScores + (BaseScore * Num)
 	Score int `json:"score"`
 	// Bonuses comprising the raw score (minus base score)
 	BonusArray []ScoreBonus `json:"bonus_array"`
@@ -95,34 +56,6 @@ type ScoreBonus struct {
 	ConditionValue1 int `json:"condition_value_1"`
 	ConditionValue2 int `json:"condition_value_2"`
 	ScoreRate       int `json:"score_rate"`
-}
-
-func NewDistanceScoresGraph(raceResults []RaceResult, distanceType int) DistanceScoresGraph {
-	scoresGraph := DistanceScoresGraph{
-		DistanceType: distanceType,
-	}
-	scoresGraph.FinalScores = make([]int, len(raceResults))
-	for _, result := range raceResults {
-		if result.DistanceType != distanceType {
-			return scoresGraph
-		}
-
-		scoresGraph.FinalScores = append(scoresGraph.FinalScores, result.TeamTotalScore)
-		scoresGraph.BonusScores = append(scoresGraph.BonusScores, result.BonusScore())
-	}
-	return scoresGraph
-}
-
-func NewCharaScoresGraph(raceResults []RaceResult, trainedCharaId int) CharaScoresGraph {
-	scoresGraph := CharaScoresGraph{
-		TrainedCharaId: trainedCharaId,
-	}
-	for _, raceResult := range raceResults {
-		charaResult := raceResult.FindCharaResults(trainedCharaId)
-		scoresGraph.FinalScores = append(scoresGraph.FinalScores, charaResult.TotalScore())
-		scoresGraph.BonusScores = append(scoresGraph.FinalScores, charaResult.BonusScore())
-	}
-	return scoresGraph
 }
 
 func LoadRaceResultsFolder(directoryPath string) ([]RaceResult, error) {
@@ -161,17 +94,6 @@ func LoadRaceResults(path string) ([]RaceResult, error) {
 		return nil, fmt.Errorf("unmarshal: %w", err)
 	}
 	return teamTrial.RaceResultArray, nil
-}
-
-// Charas that earned scores, which is only the player's own 3 umas per round
-func (raceResult RaceResult) ScoredCharas() []CharaResult {
-	scored := make([]CharaResult, 0, len(raceResult.CharaResultArray))
-	for _, charaResult := range raceResult.CharaResultArray {
-		if len(charaResult.ScoreEventArray) > 0 {
-			scored = append(scored, charaResult)
-		}
-	}
-	return scored
 }
 
 // Find chara results from a single race
