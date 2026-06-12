@@ -66,3 +66,14 @@ func LoadRaceResults(path string) ([]RaceResult, error) {
 	}
 	return teamTrial.RaceResultArray, nil
 }
+
+// Charas that earned scores, which is only the player's own 3 umas per round
+func (raceResult RaceResult) ScoredCharas() []CharaResult {
+	scored := make([]CharaResult, 0, len(raceResult.CharaResultArray))
+	for _, charaResult := range raceResult.CharaResultArray {
+		if len(charaResult.ScoreArray) > 0 {
+			scored = append(scored, charaResult)
+		}
+	}
+	return scored
+}

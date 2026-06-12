@@ -11,10 +11,12 @@ func TestLoadRaceResults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load race results: %v", err)
 	}
+	// 4 distances + dirt
 	if len(results) != 5 {
 		t.Fatalf("len(results) == %d, want 5", len(results))
 	}
 
+	// Correct round is found
 	round1 := results[0]
 	if round1.Round != 1 {
 		t.Errorf("Round == %d, want 1", round1.Round)
@@ -26,7 +28,14 @@ func TestLoadRaceResults(t *testing.T) {
 		t.Fatalf("len(CharaResultArray) == %d, want 12", len(round1.CharaResultArray))
 	}
 
-	chara := round1.CharaResultArray[2]
+	// Struct method for player's scored umas
+	scored := round1.ScoredCharas()
+	if len(scored) != 3 {
+		t.Fatalf("len(scored) == %d, want 3", len(scored))
+	}
+
+	// Different structs properly decode
+	chara := scored[0]
 	if chara.TrainedCharaId != 2984 {
 		t.Errorf("TrainedCharaId == %d, want 2984", chara.TrainedCharaId)
 	}
