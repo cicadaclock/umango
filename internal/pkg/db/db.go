@@ -5,6 +5,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"path/filepath"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -22,133 +23,92 @@ type DB struct {
 
 // Create DB struct with connection to master.mdb
 func Open() (*DB, error) {
-	db := DB{}
 	dbPath, err := DBPath()
 	if err != nil {
 		return nil, fmt.Errorf("getting master.mdb path: %w", err)
 	}
-	sqlDb, err := sql.Open("sqlite3", dbPath)
+	// master.mdb is static data, open it read-only immutable to skip locking
+	// and journal checks
+	dsn := "file:" + filepath.ToSlash(dbPath) + "?mode=ro&immutable=1"
+	sqlDb, err := sql.Open("sqlite3", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("opening master.mdb at %s: %w", dbPath, err)
 	}
-	db.SqlDB = sqlDb
-	return &db, nil
+	return &DB{SqlDB: sqlDb}, nil
 }
 
 // Map card_id to chara_id from card_data
-func (db *DB) CardData(c chan map[int]int, errCh chan error) {
-	result := make(map[int]int, 100)
-	rows, err := db.SqlDB.Query("SELECT t.id, t.chara_id FROM card_data AS t")
+func (db *DB) CardData() (map[int]int, error) {
+	result, err := queryMap[int](db.SqlDB, "SELECT t.id, t.chara_id FROM card_data AS t")
 	if err != nil {
-		errCh <- fmt.Errorf("query card_data rows: %w", err)
-		return
+		return nil, fmt.Errorf("card_data: %w", err)
 	}
-	defer rows.Close()
-	var id int
-	var chara_id int
-	for rows.Next() {
-		err := rows.Scan(&id, &chara_id)
-		if err != nil {
-			errCh <- fmt.Errorf("scanning card_data rows, %w", err)
-			return
-		}
-		result[id] = chara_id
-	}
-	c <- result
+	return result, nil
 }
 
 // Map relation_type to relation_point from succession_relation
-func (db *DB) SuccessionRelations(c chan map[int]int, errCh chan error) {
-	result := make(map[int]int, 1000)
-	rows, err := db.SqlDB.Query("SELECT t.relation_type, t.relation_point FROM succession_relation AS t")
+func (db *DB) SuccessionRelations() (map[int]int, error) {
+	result, err := queryMap[int](db.SqlDB, "SELECT t.relation_type, t.relation_point FROM succession_relation AS t")
 	if err != nil {
-		errCh <- fmt.Errorf("query succession_relation rows: %w", err)
-		return
+		return nil, fmt.Errorf("succession_relation: %w", err)
 	}
-	defer rows.Close()
-	var relation_type int
-	var relation_point int
-	for rows.Next() {
-		err := rows.Scan(&relation_type, &relation_point)
-		if err != nil {
-			errCh <- fmt.Errorf("scanning succession_relation rows, %w", err)
-			return
-		}
-		result[relation_type] = relation_point
-	}
-	c <- result
+	return result, nil
 }
 
 // Map chara_id to []relation_type from succession_relation_member
-func (db *DB) SuccessionRelationMembers(c chan map[int][]int, errCh chan error) {
-	// Get unique chara_ids
-	charaIds := make([]int, 0, 200)
-	rows, err := db.SqlDB.Query("SELECT t.chara_id FROM succession_relation_member AS t GROUP BY t.chara_id")
+func (db *DB) SuccessionRelationMembers() (map[int][]int, error) {
+	rows, err := db.SqlDB.Query("SELECT t.chara_id, t.relation_type FROM succession_relation_member AS t")
 	if err != nil {
-		errCh <- fmt.Errorf("query succession_relation_member for all chara_id: %w", err)
-		return
+		return nil, fmt.Errorf("query succession_relation_member rows: %w", err)
 	}
 	defer rows.Close()
-	var chara_id int
-	for rows.Next() {
-		err := rows.Scan(&chara_id)
-		if err != nil {
-			errCh <- fmt.Errorf("scanning succession_relation_member rows, %w", err)
-			return
-		}
-		charaIds = append(charaIds, chara_id)
-	}
 
-	// Get array of relation_type for each chara_id
-	result := make(map[int][]int, len(charaIds))
-	query, err := db.SqlDB.Prepare("SELECT t.relation_type FROM succession_relation_member AS t WHERE t.chara_id = ?")
-	if err != nil {
-		errCh <- fmt.Errorf("prepare succession_relation_member query: %w", err)
-		return
-	}
-	defer query.Close()
-	for _, id := range charaIds {
-		rows2, err := query.Query(id)
-		// rows2, err := db.SqlDB.Query("SELECT t.relation_type FROM succession_relation_member AS t WHERE t.chara_id = 1001")
-		if err != nil {
-			errCh <- fmt.Errorf("query succession_relation_member rows where chara_id = %d: %w", id, err)
-			return
+	result := make(map[int][]int, 200)
+	var charaId int
+	var relationType int
+	for rows.Next() {
+		if err := rows.Scan(&charaId, &relationType); err != nil {
+			return nil, fmt.Errorf("scanning succession_relation_member rows: %w", err)
 		}
-		defer rows2.Close()
-		var relation_type int
-		relationTypeList := make([]int, 0, 200)
-		for rows2.Next() {
-			err := rows2.Scan(&relation_type)
-			if err != nil {
-				errCh <- fmt.Errorf("scanning succession_relation_member rows, %w", err)
-				return
-			}
-			relationTypeList = append(relationTypeList, relation_type)
-		}
-		result[id] = relationTypeList
+		result[charaId] = append(result[charaId], relationType)
 	}
-	c <- result
+	return result, rows.Err()
 }
 
-func (db *DB) SuccessionFactors(c chan map[int]int, errCh chan error) {
-	result := make(map[int]int, 1000)
-	rows, err := db.SqlDB.Query("SELECT t.factor_id, t.factor_type FROM succession_factor AS t")
+// Map factor_id to factor_type from succession_factor
+func (db *DB) SuccessionFactors() (map[int]int, error) {
+	result, err := queryMap[int](db.SqlDB, "SELECT t.factor_id, t.factor_type FROM succession_factor AS t")
 	if err != nil {
-		errCh <- fmt.Errorf("query succession_factor rows: %w", err)
-		return
+		return nil, fmt.Errorf("succession_factor: %w", err)
 	}
-	defer rows.Close()
-	var factor_id int
-	var factor_type int
-	for rows.Next() {
-		err := rows.Scan(&factor_id, &factor_type)
-		if err != nil {
-			errCh <- fmt.Errorf("scanning succession_factor rows, %w", err)
-			return
-		}
-		result[factor_id] = factor_type
+	return result, nil
+}
+
+// Map skill_id to text from text_data
+func (db *DB) TextDataFactors() (map[int]string, error) {
+	result, err := db.textData(textDataFactors, 0, 0, false)
+	if err != nil {
+		return nil, fmt.Errorf("get factors (skill sparks): %w", err)
 	}
-	c <- result
+	return result, nil
+}
+
+// Map chara_id to text from text_data
+func (db *DB) TextDataCharaName() (map[int]string, error) {
+	result, err := db.textData(textDataCharaName, 0, 0, false)
+	if err != nil {
+		return nil, fmt.Errorf("get chara id: %w", err)
+	}
+	return result, nil
+}
+
+// Map card_id to text from text_data
+func (db *DB) TextDataVeteranCardId() (map[int]string, error) {
+	result, err := db.textData(textDataCardId, 0, 0, false)
+	if err != nil {
+		return nil, fmt.Errorf("get card id: %w", err)
+	}
+	return result, nil
 }
 
 // Map index to text from text_data
@@ -157,7 +117,6 @@ func (db *DB) textData(category, minIndex, maxIndex int, between bool) (map[int]
 		return nil, fmt.Errorf("minimum index larger than max index")
 	}
 
-	result := make(map[int]string, 2000)
 	query := fmt.Sprintf("SELECT t.'index', text FROM text_data AS t WHERE (t.category = %d)", category)
 	if maxIndex > 0 {
 		if between {
@@ -166,50 +125,25 @@ func (db *DB) textData(category, minIndex, maxIndex int, between bool) (map[int]
 			query += fmt.Sprintf(" AND (t.'index' NOT BETWEEN %d AND %d)", minIndex, maxIndex)
 		}
 	}
+	return queryMap[string](db.SqlDB, query)
+}
 
-	rows, err := db.SqlDB.Query(query)
+// Scan the rows of a two column query into a map
+func queryMap[V int | string](sqlDB *sql.DB, query string) (map[int]V, error) {
+	rows, err := sqlDB.Query(query)
 	if err != nil {
-		return nil, fmt.Errorf("query text_data rows: %w", err)
+		return nil, fmt.Errorf("query rows: %w", err)
 	}
 	defer rows.Close()
-	var index int
-	var text string
+
+	result := make(map[int]V, 1024)
+	var key int
+	var value V
 	for rows.Next() {
-		err := rows.Scan(&index, &text)
-		if err != nil {
-			return nil, fmt.Errorf("scanning text_data rows, %w", err)
+		if err := rows.Scan(&key, &value); err != nil {
+			return nil, fmt.Errorf("scanning rows: %w", err)
 		}
-		result[index] = text
+		result[key] = value
 	}
-	return result, nil
-}
-
-// Map skill_id to text from text_data
-func (db *DB) TextDataFactors(c chan map[int]string, errCh chan error) {
-	result, err := db.textData(textDataFactors, 0, 0, false)
-	if err != nil {
-		errCh <- fmt.Errorf("get factors (skill sparks): %w", err)
-		return
-	}
-	c <- result
-}
-
-// Map chara_id to text from text_data
-func (db *DB) TextDataCharaName(c chan map[int]string, errCh chan error) {
-	result, err := db.textData(textDataCharaName, 0, 0, false)
-	if err != nil {
-		errCh <- fmt.Errorf("get chara id: %w", err)
-		return
-	}
-	c <- result
-}
-
-// Map card_id to text from text_data
-func (db *DB) TextDataVeteranCardId(c chan map[int]string, errCh chan error) {
-	result, err := db.textData(textDataCardId, 0, 0, false)
-	if err != nil {
-		errCh <- fmt.Errorf("get card id: %w", err)
-		return
-	}
-	c <- result
+	return result, rows.Err()
 }
