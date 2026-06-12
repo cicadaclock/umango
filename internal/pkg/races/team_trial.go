@@ -3,16 +3,24 @@ package races
 import (
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
+	"path/filepath"
 )
+
+type RaceInfo struct {
+	DistanceTypes   []int
+	TeamTotalScores []int
+}
 
 // Result of a single team trial round
 type RaceResult struct {
 	DistanceType int `json:"distance_type"`
 	// Base64-encoded compressed race scenario blob
-	RaceScenario               string        `json:"race_scenario"`
-	Round                      int           `json:"round"`
-	TeamTotalScore             int           `json:"team_total_score"`
+	RaceScenario   string `json:"race_scenario"`
+	Round          int    `json:"round"`
+	TeamTotalScore int    `json:"team_total_score"`
+	// Win (1) or loss (2)
 	WinType                    int           `json:"win_type"`
 	CurrentConsecutiveWinCount int           `json:"current_consecutive_win_count"`
 	BonusRateByNextWin         int           `json:"bonus_rate_by_next_win"`
@@ -24,30 +32,63 @@ type CharaResult struct {
 	FrameOrder     int `json:"frame_order"`
 	TrainedCharaId int `json:"trained_chara_id"`
 	TeamId         int `json:"team_id"`
-	FinishOrder    int `json:"finish_order"`
-	FinishTime     int `json:"finish_time"`
+	// Placing in race
+	FinishOrder int `json:"finish_order"`
+	FinishTime  int `json:"finish_time"`
 	// Scores earned during the race
 	ScoreArray []Score `json:"score_array"`
 }
 
 // Score earned from a single scoring event
 type Score struct {
+	// Type of score (1st, 2nd, 2 1/2 Lengths, etc.)
+	//
+	// Notable IDs:
+	//   57 = Skill activated
+	//   Rare skill activated
 	RawScoreId int `json:"raw_score_id"`
 	// Number of times the scoring event occurred
-	Num   int `json:"num"`
+	Num int `json:"num"`
+	// Final score value for a given scoring event. Score = sum([]ScoreBonus.BonusScore) + BaseScore
 	Score int `json:"score"`
-	// Bonuses applied on top of the raw score
+	// Bonuses comprising the raw score
 	BonusArray []ScoreBonus `json:"bonus_array"`
 }
 
 // Bonus applied to a score
 type ScoreBonus struct {
+	// Type of bonus score (Opponent rating, support bonus, ace bonus, etc.)
+	//
+	// Notable IDs:
+	//   2 = Opponent rating bonus
+	//   8 = Support bonus
 	ScoreBonusId    int `json:"score_bonus_id"`
 	BonusScore      int `json:"bonus_score"`
 	ConditionType   int `json:"condition_type"`
 	ConditionValue1 int `json:"condition_value_1"`
 	ConditionValue2 int `json:"condition_value_2"`
 	ScoreRate       int `json:"score_rate"`
+}
+
+func LoadRaceResultsFolder(directoryPath string) ([]RaceResult, error) {
+	// 20 TT samples, 5 race results per TT sample = 100 results
+	allRaceResults := make([]RaceResult, 0, 100)
+	filepath.WalkDir(directoryPath, func(path string, d fs.DirEntry, err error) error {
+		if d.IsDir() {
+			return nil
+		} else if filepath.Ext(d.Name()) != ".json" {
+			return nil
+		}
+
+		raceResults, err := LoadRaceResults(path)
+		// If parsing race results fails, just skip it
+		if err != nil {
+			return nil
+		}
+		allRaceResults = append(allRaceResults, raceResults...)
+		return nil
+	})
+	return allRaceResults, nil
 }
 
 func LoadRaceResults(path string) ([]RaceResult, error) {
