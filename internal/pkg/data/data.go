@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/cicadaclock/umango/internal/pkg/db"
+	"golang.org/x/sync/errgroup"
 )
 
 // Anything we want to store as a single source of data
@@ -39,37 +40,16 @@ func Init() (*DataStore, error) {
 	defer db.SqlDB.Close()
 
 	// Store DB results into memory
-	chCount := 7
-	chCardData := make(chan map[int]int)
-	chSuccessionRelations := make(chan map[int]int)
-	chSuccessionRelationMembers := make(chan map[int][]int)
-	chFactorNames := make(chan map[int]string)
-	chVeteranCardId := make(chan map[int]string)
-	chCharaNames := make(chan map[int]string)
-	chFactorType := make(chan map[int]int)
-	errCh := make(chan error)
-
-	go db.CardData(chCardData, errCh)
-	go db.SuccessionRelations(chSuccessionRelations, errCh)
-	go db.SuccessionRelationMembers(chSuccessionRelationMembers, errCh)
-	go db.TextDataFactors(chFactorNames, errCh)
-	go db.TextDataVeteranCardId(chVeteranCardId, errCh)
-	go db.TextDataCharaName(chCharaNames, errCh)
-	go db.SuccessionFactors(chFactorType, errCh)
-
-	for range chCount {
-		select {
-		case err := <-errCh:
-			close(errCh)
-			return &dataStore, fmt.Errorf("load db data: %w", err)
-		case dataStore.CardData = <-chCardData:
-		case dataStore.SuccessionRelations = <-chSuccessionRelations:
-		case dataStore.SuccessionRelationMembers = <-chSuccessionRelationMembers:
-		case dataStore.FactorNames = <-chFactorNames:
-		case dataStore.VeteranCardId = <-chVeteranCardId:
-		case dataStore.CharaNames = <-chCharaNames:
-		case dataStore.FactorType = <-chFactorType:
-		}
+	var g errgroup.Group
+	g.Go(func() (err error) { dataStore.CardData, err = db.CardData(); return })
+	g.Go(func() (err error) { dataStore.SuccessionRelations, err = db.SuccessionRelations(); return })
+	g.Go(func() (err error) { dataStore.SuccessionRelationMembers, err = db.SuccessionRelationMembers(); return })
+	g.Go(func() (err error) { dataStore.FactorNames, err = db.TextDataFactors(); return })
+	g.Go(func() (err error) { dataStore.VeteranCardId, err = db.TextDataVeteranCardId(); return })
+	g.Go(func() (err error) { dataStore.CharaNames, err = db.TextDataCharaName(); return })
+	g.Go(func() (err error) { dataStore.FactorType, err = db.SuccessionFactors(); return })
+	if err := g.Wait(); err != nil {
+		return &dataStore, fmt.Errorf("load db data: %w", err)
 	}
 
 	return &dataStore, nil
