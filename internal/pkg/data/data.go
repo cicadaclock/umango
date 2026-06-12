@@ -15,6 +15,7 @@ type DataStore struct {
 	SuccessionRelations       map[int]int
 	SuccessionRelationMembers map[int][]int
 	FactorType                map[int]int
+	TTRawScores               map[int]int
 
 	// Text mappings
 	// Factor ID to factor name
@@ -48,6 +49,7 @@ func Init() (*DataStore, error) {
 	g.Go(func() (err error) { dataStore.VeteranCardId, err = db.TextDataVeteranCardId(); return })
 	g.Go(func() (err error) { dataStore.CharaNames, err = db.TextDataCharaName(); return })
 	g.Go(func() (err error) { dataStore.FactorType, err = db.SuccessionFactors(); return })
+	g.Go(func() (err error) { dataStore.TTRawScores, err = db.TeamStadiumRawScores(); return })
 	if err := g.Wait(); err != nil {
 		return &dataStore, fmt.Errorf("load db data: %w", err)
 	}
@@ -69,6 +71,15 @@ func (dataStore *DataStore) MapFactorTypes(ids []int) []int {
 	result := make([]int, 0, len(ids))
 	for _, id := range ids {
 		result = append(result, dataStore.FactorType[id])
+	}
+	return result
+}
+
+// Maps score ID to raw score value
+func (dataStore *DataStore) MapTTRawScores(ids []int) []int {
+	result := make([]int, 0, len(ids))
+	for _, id := range ids {
+		result = append(result, dataStore.TTRawScores[id])
 	}
 	return result
 }

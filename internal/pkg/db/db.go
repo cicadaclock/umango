@@ -84,6 +84,15 @@ func (db *DB) SuccessionFactors() (map[int]int, error) {
 	return result, nil
 }
 
+// Maps raw_score_id to score from team_stadium_raw_score
+func (db *DB) TeamStadiumRawScores() (map[int]int, error) {
+	result, err := queryMap[int](db.SqlDB, "SELECT t.id, t.score FROM team_stadium_raw_score AS t")
+	if err != nil {
+		return nil, fmt.Errorf("team_stadium_raw_score: %w", err)
+	}
+	return result, nil
+}
+
 // Map skill_id to text from text_data
 func (db *DB) TextDataFactors() (map[int]string, error) {
 	result, err := db.textData(textDataFactors, 0, 0, false)
