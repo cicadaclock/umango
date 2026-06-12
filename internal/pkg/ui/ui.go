@@ -24,7 +24,7 @@ var (
 	windowSize                        = fyne.NewSize(windowWidth, windowHeight)
 )
 
-func App(assets embed.FS, dataStore *data.DataStore) error {
+func App(assets embed.FS) error {
 	a := app.New()
 	// Use a custom theme that returns the default theme
 	// if I need to override the defaults at any point.
@@ -35,10 +35,37 @@ func App(assets embed.FS, dataStore *data.DataStore) error {
 	a.Settings().SetTheme(app_theme.NewAppTheme(font))
 	window := a.NewWindow("Umango")
 	window.Resize(windowSize)
+	window.SetContent(loadingScreen())
 
-	window.SetContent(mainMenu(dataStore, window))
+	// Async load master.mdb, shouldn't be too long but don't want to hang the UI
+	// TODO: Also load veteran list from pre-existing config file?
+	go func() {
+		dataStore, err := data.Init()
+		fyne.Do(func() {
+			if err != nil {
+				window.SetContent(loadingErrorScreen(err))
+				return
+			}
+			window.SetContent(mainMenu(dataStore, window))
+		})
+	}()
+
 	window.ShowAndRun()
 	return nil
+}
+
+func loadingScreen() *fyne.Container {
+	progress := widget.NewProgressBarInfinite()
+	return container.NewCenter(container.NewVBox(
+		widget.NewLabel("Loading master.mdb..."),
+		progress,
+	))
+}
+
+func loadingErrorScreen(err error) *fyne.Container {
+	label := widget.NewLabel(fmt.Sprintf("Failed to load master.mdb:\n%v", err))
+	label.Alignment = fyne.TextAlignCenter
+	return container.NewCenter(label)
 }
 
 func mainMenu(dataStore *data.DataStore, window fyne.Window) *fyne.Container {
