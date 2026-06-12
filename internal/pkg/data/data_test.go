@@ -28,15 +28,15 @@ func TestFactorNames(t *testing.T) {
 		2015603,
 	}
 	want := []string{
-		"Power ★★★",
-		"Mile ★★",
-		"Oka Sho ★",
-		"Yasuda Kinen ★",
-		"Corner Recovery ○ ★",
-		"Nimble Navigator ★",
-		"Shifting Gears ★★★",
-		"Murmur ★",
-		"Lucky Seven ★★★",
+		"Power",
+		"Mile",
+		"Oka Sho",
+		"Yasuda Kinen",
+		"Corner Recovery ○",
+		"Nimble Navigator",
+		"Shifting Gears",
+		"Murmur",
+		"Lucky Seven",
 	}
 	result := dataStore.MapFactorNames(factorIds)
 	if !reflect.DeepEqual(result, want) {
