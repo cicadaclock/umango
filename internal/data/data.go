@@ -5,7 +5,7 @@ package data
 import (
 	"fmt"
 
-	"github.com/cicadaclock/umango/internal/pkg/db"
+	"github.com/cicadaclock/umango/internal/db"
 	"golang.org/x/sync/errgroup"
 )
 
