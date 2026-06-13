@@ -1,13 +1,5 @@
 package races
 
-import (
-	"encoding/json"
-	"fmt"
-	"io/fs"
-	"os"
-	"path/filepath"
-)
-
 // Result of a single team trial round
 type RaceResult struct {
 	DistanceType int `json:"distance_type"`
@@ -56,44 +48,6 @@ type ScoreBonus struct {
 	ConditionValue1 int `json:"condition_value_1"`
 	ConditionValue2 int `json:"condition_value_2"`
 	ScoreRate       int `json:"score_rate"`
-}
-
-func LoadRaceResultsFolder(directoryPath string) ([]RaceResult, error) {
-	// 20 TT samples, 5 race results per TT sample = 100 results
-	allRaceResults := make([]RaceResult, 0, 100)
-	filepath.WalkDir(directoryPath, func(path string, d fs.DirEntry, err error) error {
-		if d.IsDir() {
-			return nil
-		} else if filepath.Ext(d.Name()) != ".json" {
-			return nil
-		}
-
-		raceResults, err := LoadRaceResults(path)
-		// If parsing race results fails, just skip it
-		if err != nil {
-			return nil
-		}
-		allRaceResults = append(allRaceResults, raceResults...)
-		return nil
-	})
-	return allRaceResults, nil
-}
-
-func LoadRaceResults(path string) ([]RaceResult, error) {
-	if path == "" {
-		return nil, fmt.Errorf("empty path")
-	}
-	file, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("read file %s: %w", path, err)
-	}
-	var teamTrial struct {
-		RaceResultArray []RaceResult `json:"race_result_array"`
-	}
-	if err := json.Unmarshal(file, &teamTrial); err != nil {
-		return nil, fmt.Errorf("unmarshal: %w", err)
-	}
-	return teamTrial.RaceResultArray, nil
 }
 
 // Find chara results from a single race
