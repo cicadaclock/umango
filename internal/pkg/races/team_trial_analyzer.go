@@ -6,6 +6,7 @@ import (
 )
 
 type RaceResultsSoA struct {
+	TeamTotalScoreSum int
 	DistanceTypes     []int
 	TeamTotalScores   []int
 	WinTypes          []int
@@ -39,6 +40,7 @@ func makeRaceResultsSoA(capacity int) RaceResultsSoA {
 func (soa *RaceResultsSoA) appendRace(raceResult RaceResult) {
 	soa.DistanceTypes = append(soa.DistanceTypes, raceResult.DistanceType)
 	soa.TeamTotalScores = append(soa.TeamTotalScores, raceResult.TeamTotalScore)
+	soa.TeamTotalScoreSum += raceResult.TeamTotalScore
 	soa.WinTypes = append(soa.WinTypes, raceResult.WinType)
 	soa.CharaResultArrays = append(soa.CharaResultArrays, raceResult.CharaResultArray)
 }
@@ -48,24 +50,29 @@ func (soa RaceResultsSoA) UniqueCharas() []int {
 	trainedCharaIDs := make(map[int]bool, 15)
 	for _, charaResults := range soa.CharaResultArrays {
 		for _, charaResult := range charaResults {
-			if len(charaResult.ScoreEventArray) != 0 {
-				trainedCharaIDs[charaResult.TrainedCharaId] = true
+			if len(charaResult.ScoreEventArray) == 0 {
+				continue
 			}
+			trainedCharaIDs[charaResult.TrainedCharaId] = true
 		}
 	}
 	return slices.Collect(maps.Keys(trainedCharaIDs))
 }
 
 // Maps trainedCharaIds to their race result set
-func (soa RaceResultsSoA) CharaResultSoA() map[int]CharaResultSoA {
-	mapCharaResultSoA := make(map[int]CharaResultSoA, len(soa.UniqueCharas()))
+func (soa RaceResultsSoA) CharaResultSoA() map[int]*CharaResultSoA {
+	mapCharaResultSoA := make(map[int]*CharaResultSoA, 15)
 	for _, charaResults := range soa.CharaResultArrays {
 		for _, charaResult := range charaResults {
-			if len(charaResult.ScoreEventArray) != 0 {
-				soa := mapCharaResultSoA[charaResult.TrainedCharaId]
-				soa.append(charaResult)
+			if len(charaResult.ScoreEventArray) == 0 {
+				continue
+			}
+			soa := mapCharaResultSoA[charaResult.TrainedCharaId]
+			if soa == nil {
+				soa = &CharaResultSoA{}
 				mapCharaResultSoA[charaResult.TrainedCharaId] = soa
 			}
+			soa.append(charaResult)
 		}
 	}
 	return mapCharaResultSoA
@@ -119,15 +126,19 @@ func (soa RaceResultsSoA) CharaTotalScores() []int {
 	return totalScores
 }
 
+func (soa RaceResultsSoA) TotalScoreAverage() int {
+	return soa.TeamTotalScoreSum / soa.Len()
+}
+
 func (soa *CharaResultSoA) append(charaResult CharaResult) {
 	totalScore := charaResult.TotalScore()
 	bonusScore := charaResult.BonusScore()
 	soa.TotalScore = append(soa.TotalScore, totalScore)
 	soa.TotalScoreSum += totalScore
-	soa.BonusScore = append(soa.TotalScore, bonusScore)
+	soa.BonusScore = append(soa.BonusScore, bonusScore)
 	soa.BonusScoreSum += bonusScore
 }
 
-func (soa CharaResultSoA) Average() float64 {
-	return float64(soa.TotalScoreSum) / float64(len(soa.TotalScore))
+func (soa CharaResultSoA) TotalScoreAverage() int {
+	return soa.TotalScoreSum / len(soa.TotalScore)
 }
