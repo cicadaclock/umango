@@ -16,8 +16,8 @@ import (
 	"fyne.io/fyne/v2/widget"
 	"github.com/cicadaclock/umango/internal/pkg/data"
 	"github.com/cicadaclock/umango/internal/pkg/races"
-	"github.com/cicadaclock/umango/internal/pkg/ui/app_theme"
-	centersteppedlayout "github.com/cicadaclock/umango/internal/pkg/ui/center_stepped_layout"
+	"github.com/cicadaclock/umango/internal/pkg/ui/apptheme"
+	"github.com/cicadaclock/umango/internal/pkg/ui/centersteppedlayout"
 	"github.com/cicadaclock/umango/internal/pkg/ui/veteranwidget"
 	"github.com/s-daehling/fyne-charts/pkg/coord"
 	gdata "github.com/s-daehling/fyne-charts/pkg/data"
@@ -37,7 +37,7 @@ func App(assets embed.FS) error {
 	if err != nil {
 		return fmt.Errorf("read assets: %w", err)
 	}
-	a.Settings().SetTheme(app_theme.NewAppTheme(font))
+	a.Settings().SetTheme(apptheme.NewAppTheme(font))
 	window := a.NewWindow("Umango")
 	window.Resize(windowSize)
 	window.SetContent(loadingScreen())
