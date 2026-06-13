@@ -3,7 +3,7 @@ package veteran
 import (
 	"testing"
 
-	"github.com/cicadaclock/umango/internal/pkg/data"
+	"github.com/cicadaclock/umango/internal/data"
 )
 
 func setup(t *testing.T) *data.DataStore {

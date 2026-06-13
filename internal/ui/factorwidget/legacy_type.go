@@ -5,7 +5,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/theme"
-	"github.com/cicadaclock/umango/internal/pkg/ui/apptheme"
+	"github.com/cicadaclock/umango/internal/ui/apptheme"
 )
 
 // LegacyType represents the parent that each factor in factor_widget belongs to

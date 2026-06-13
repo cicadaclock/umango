@@ -6,7 +6,7 @@ import (
 )
 
 func TestRaceResultsSoA(t *testing.T) {
-	path := filepath.Join("..", "..", "testdata", "team_trial.json")
+	path := filepath.Join("..", "testdata", "team_trial.json")
 	results, err := LoadRaceResults(path)
 	if err != nil {
 		t.Fatalf("load race results: %v", err)

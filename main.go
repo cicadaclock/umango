@@ -4,7 +4,7 @@ import (
 	"embed"
 	"log"
 
-	"github.com/cicadaclock/umango/internal/pkg/ui"
+	"github.com/cicadaclock/umango/internal/ui"
 )
 
 var (

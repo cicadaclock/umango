@@ -3,7 +3,7 @@ package veteran
 import (
 	"fmt"
 
-	"github.com/cicadaclock/umango/internal/pkg/data"
+	"github.com/cicadaclock/umango/internal/data"
 )
 
 // Single uma in the legacy tree

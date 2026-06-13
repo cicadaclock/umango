@@ -9,7 +9,7 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
-	"github.com/cicadaclock/umango/internal/pkg/data"
+	"github.com/cicadaclock/umango/internal/data"
 )
 
 type FactorWidget struct {

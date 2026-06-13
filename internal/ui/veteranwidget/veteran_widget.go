@@ -6,9 +6,9 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
-	"github.com/cicadaclock/umango/internal/pkg/data"
-	"github.com/cicadaclock/umango/internal/pkg/ui/factorwidget"
-	"github.com/cicadaclock/umango/internal/pkg/veteran"
+	"github.com/cicadaclock/umango/internal/data"
+	"github.com/cicadaclock/umango/internal/ui/factorwidget"
+	"github.com/cicadaclock/umango/internal/veteran"
 )
 
 const (
