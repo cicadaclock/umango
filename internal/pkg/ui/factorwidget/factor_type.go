@@ -5,7 +5,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/theme"
-	"github.com/cicadaclock/umango/internal/pkg/ui/app_theme"
+	"github.com/cicadaclock/umango/internal/pkg/ui/apptheme"
 )
 
 // FactorType represents how a factor_widget should appear
@@ -29,19 +29,19 @@ func (t FactorType) ColorName() fyne.ThemeColorName {
 	var color fyne.ThemeColorName
 	switch t {
 	case NoneFactor:
-		color = app_theme.ColorFactorBackground
+		color = apptheme.ColorFactorBackground
 	case RedFactor:
-		color = app_theme.ColorFactorRed
+		color = apptheme.ColorFactorRed
 	case GreenFactor:
-		color = app_theme.ColorFactorGreen
+		color = apptheme.ColorFactorGreen
 	case BlueFactor:
-		color = app_theme.ColorFactorBlue
+		color = apptheme.ColorFactorBlue
 	case WhiteFactor:
-		color = app_theme.ColorFactorWhite
+		color = apptheme.ColorFactorWhite
 	case RaceFactor:
-		color = app_theme.ColorFactorRace
+		color = apptheme.ColorFactorRace
 	default:
-		color = app_theme.ColorFactorWhite
+		color = apptheme.ColorFactorWhite
 	}
 	return color
 }

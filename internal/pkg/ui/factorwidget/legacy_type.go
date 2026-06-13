@@ -5,7 +5,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/theme"
-	"github.com/cicadaclock/umango/internal/pkg/ui/app_theme"
+	"github.com/cicadaclock/umango/internal/pkg/ui/apptheme"
 )
 
 // LegacyType represents the parent that each factor in factor_widget belongs to
@@ -26,13 +26,13 @@ func (l LegacyType) ColorName() fyne.ThemeColorName {
 	var color fyne.ThemeColorName
 	switch l {
 	case MainLegacy:
-		color = app_theme.ColorFactorMain
+		color = apptheme.ColorFactorMain
 	case ParentALegacy:
-		color = app_theme.ColorFactorWhite
+		color = apptheme.ColorFactorWhite
 	case ParentBLegacy:
-		color = app_theme.ColorFactorWhite
+		color = apptheme.ColorFactorWhite
 	default:
-		color = app_theme.ColorFactorWhite
+		color = apptheme.ColorFactorWhite
 	}
 	return color
 }

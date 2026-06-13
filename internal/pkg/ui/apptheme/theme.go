@@ -1,4 +1,4 @@
-package app_theme
+package apptheme
 
 import (
 	"image/color"
