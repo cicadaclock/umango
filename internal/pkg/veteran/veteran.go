@@ -14,7 +14,7 @@ type Veteran struct {
 	// Metadata
 
 	// Veteran ID that is unique locally to your account
-	LocalVeteranId int `json:"single_mode_chara_id"`
+	LocalVeteranId int `json:"trained_chara_id"`
 	// Veteran card ID that determines the chara
 	CardId     int    `json:"card_id"`
 	CreateTime string `json:"create_time"`
