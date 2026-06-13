@@ -2,11 +2,13 @@ package pages
 
 import (
 	"fmt"
+	"image/color"
 	"log"
 	"os"
 	"path/filepath"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
 	"github.com/cicadaclock/umango/internal/races"
@@ -15,50 +17,79 @@ import (
 	"github.com/s-daehling/fyne-charts/pkg/style"
 )
 
+type DistanceType int
+
+const (
+	_                   = iota
+	Sprint DistanceType = iota
+	Mile
+	Medium
+	Long
+	Dirt
+)
+
+var distances = []DistanceType{Sprint, Mile, Medium, Long, Dirt}
+
 func TeamTrialsChart() *fyne.Container {
 	// Get data, hardcoded for now
 	home, _ := os.UserHomeDir()
 	results, _ := races.LoadRaceResultsFolder(filepath.Join(home, "Documents", "Saved races", "Team trials"))
 	soa := races.NewRaceResultsSoA(results)
-	// charaResults := soa.CharaResultSoA()
-	// for trainedCharaId, resultSoA := range charaResults {
-	// }
 
-	chart := coord.NewCartesianNumericalChart("Title of Example Chart")
+	chart := coord.NewCartesianNumericalChart("Total scores per distance")
 	chart.SetXAxisLabel("Samples")
 	chart.SetYAxisLabel("Score")
 
 	pal := style.NewPaletteTriadic(theme.ColorNamePrimary)
 	pal = style.NewPaletteLightDarkSet(pal.Names())
-	for i := 1; i <= 5; i++ {
-		raceByType := soa.FilterByDistanceType(i)
-		numData := []gdata.NumericalPoint{}
-		for i, totalScore := range raceByType.TeamTotalScores {
+	raceAveragesContainer := container.NewHBox()
+	var finalScoreNps []*coord.NumericalPointSeries
+	for _, i := range distances {
+		raceByType := soa.FilterByDistanceType(int(i))
+
+		// Populate chart
+		finalScoreData := []gdata.NumericalPoint{}
+		for i := range raceByType.TeamTotalScores {
+			totalScore := raceByType.TeamTotalScores[i]
 			point := gdata.NumericalPoint{
 				N:   float64(i),
 				Val: float64(totalScore),
 			}
-			numData = append(numData, point)
+			finalScoreData = append(finalScoreData, point)
 		}
-		nps, err := coord.NewNumericalPointSeries(string(rune(i)), pal.Next(), numData)
+		nps, err := coord.NewNumericalPointSeries(i.String(), pal.Next(), finalScoreData)
 		if err != nil {
-			log.Fatalf("fuck")
+			log.Fatalf("error creating nps: %v", err)
 		}
+		finalScoreNps = append(finalScoreNps, nps)
+
+		// Create text
+		averageText := fmt.Sprintf("%s: %d", i.String(), raceByType.TotalScoreAverage())
+		raceAveragesContainer.Add(container.NewHBox(canvas.NewText(averageText, color.Black)))
+	}
+
+	for _, nps := range finalScoreNps {
 		_ = chart.AddLineSeries(nps, true)
 	}
 
-	return container.NewBorder(nil, nil, nil, nil, chart)
+	_ = chart.SetOrigin(0, 0)
+
+	page := container.NewBorder(nil, raceAveragesContainer, nil, nil, chart)
+	return page
 }
 
-func testTTData() {
-	home, _ := os.UserHomeDir()
-	results, _ := races.LoadRaceResultsFolder(filepath.Join(home, "Documents", "Saved races", "Team trials"))
-	soa := races.NewRaceResultsSoA(results)
-	fmt.Println("Unique charas: ", soa.UniqueCharas())
-	for k, v := range soa.CharaResultSoA() {
-		fmt.Println(k, v.TotalScoreAverage(), v.TotalScore)
+func (dt DistanceType) String() string {
+	switch dt {
+	case Sprint:
+		return "Sprint"
+	case Mile:
+		return "Mile"
+	case Medium:
+		return "Medium"
+	case Long:
+		return "Long"
+	case Dirt:
+		return "Dirt"
 	}
-	fmt.Println("Team")
-	mile := soa.FilterByDistanceType(1)
-	fmt.Println(mile.TotalScoreAverage(), mile.TeamTotalScores)
+	return ""
 }
