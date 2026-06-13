@@ -14,6 +14,7 @@ import (
 	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/widget"
 	"github.com/cicadaclock/umango/internal/pkg/data"
+	"github.com/cicadaclock/umango/internal/pkg/races"
 	"github.com/cicadaclock/umango/internal/pkg/ui/app_theme"
 	centersteppedlayout "github.com/cicadaclock/umango/internal/pkg/ui/center_stepped_layout"
 	"github.com/cicadaclock/umango/internal/pkg/ui/veteranwidget"
@@ -142,4 +143,17 @@ func defaultWidget() *fyne.Container {
 		}),
 	)
 	return c
+}
+
+func testTTData() {
+	home, _ := os.UserHomeDir()
+	results, _ := races.LoadRaceResultsFolder(filepath.Join(home, "Documents", "Saved races", "Team trials"))
+	soa := races.NewRaceResultsSoA(results)
+	fmt.Println("Unique charas: ", soa.UniqueCharas())
+	for k, v := range soa.CharaResultSoA() {
+		fmt.Println(k, v.TotalScoreAverage(), v.TotalScore)
+	}
+	fmt.Println("Team")
+	mile := soa.FilterByDistanceType(1)
+	fmt.Println(mile.TotalScoreAverage(), mile.TeamTotalScores)
 }
