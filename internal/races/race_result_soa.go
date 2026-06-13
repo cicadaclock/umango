@@ -18,8 +18,15 @@ type RaceResultsSoA struct {
 type CharaResultSoA struct {
 	TotalScoreSum int
 	BonusScoreSum int
-	TotalScore    []int
-	BonusScore    []int
+	// TotalScore    []int
+	// BonusScore    []int
+	TotalScore ScoreArray
+	BonusScore ScoreArray
+}
+
+type ScoreArray struct {
+	Sum   int
+	Score []int
 }
 
 func NewRaceResultsSoA(raceResults []RaceResult) RaceResultsSoA {
@@ -142,12 +149,34 @@ func (soa RaceResultsSoA) BonusScoreAverage() int {
 func (soa *CharaResultSoA) append(charaResult CharaResult) {
 	totalScore := charaResult.TotalScore()
 	bonusScore := charaResult.BonusScore()
-	soa.TotalScore = append(soa.TotalScore, totalScore)
-	soa.TotalScoreSum += totalScore
-	soa.BonusScore = append(soa.BonusScore, bonusScore)
-	soa.BonusScoreSum += bonusScore
+	soa.TotalScore.append(totalScore)
+	soa.BonusScore.append(bonusScore)
 }
 
 func (soa CharaResultSoA) TotalScoreAverage() int {
-	return soa.TotalScoreSum / len(soa.TotalScore)
+	return soa.TotalScore.Average()
+}
+
+func (s *ScoreArray) append(i int) {
+	s.Score = append(s.Score, i)
+	s.Sum += i
+}
+
+func (s ScoreArray) Average() int {
+	return s.Sum / s.Len()
+}
+
+func (s ScoreArray) Len() int {
+	return len(s.Score)
+}
+
+// Filter selects only the elements that match the provided indices
+func (s ScoreArray) Filter(indices []int) ScoreArray {
+	filtered := ScoreArray{}
+	for _, i := range indices {
+		if i >= 0 && i < len(s.Score) {
+			filtered.append(s.Score[i])
+		}
+	}
+	return filtered
 }
