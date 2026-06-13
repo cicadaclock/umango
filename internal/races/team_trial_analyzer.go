@@ -6,11 +6,13 @@ import (
 )
 
 type RaceResultsSoA struct {
-	TeamTotalScoreSum int
-	DistanceTypes     []int
-	TeamTotalScores   []int
-	WinTypes          []int
-	CharaResultArrays [][]CharaResult
+	TeamTotalScoreSum      int
+	TeamTotalBonusScoreSum int
+	DistanceTypes          []int
+	TeamTotalScores        []int
+	TeamTotalBonusScores   []int
+	WinTypes               []int
+	CharaResultArrays      [][]CharaResult
 }
 
 type CharaResultSoA struct {
@@ -41,6 +43,9 @@ func (soa *RaceResultsSoA) appendRace(raceResult RaceResult) {
 	soa.DistanceTypes = append(soa.DistanceTypes, raceResult.DistanceType)
 	soa.TeamTotalScores = append(soa.TeamTotalScores, raceResult.TeamTotalScore)
 	soa.TeamTotalScoreSum += raceResult.TeamTotalScore
+	bonusScore := raceResult.BonusScore()
+	soa.TeamTotalBonusScores = append(soa.TeamTotalBonusScores, bonusScore)
+	soa.TeamTotalBonusScoreSum += bonusScore
 	soa.WinTypes = append(soa.WinTypes, raceResult.WinType)
 	soa.CharaResultArrays = append(soa.CharaResultArrays, raceResult.CharaResultArray)
 }
@@ -128,6 +133,10 @@ func (soa RaceResultsSoA) CharaTotalScores() []int {
 
 func (soa RaceResultsSoA) TotalScoreAverage() int {
 	return soa.TeamTotalScoreSum / soa.Len()
+}
+
+func (soa RaceResultsSoA) BonusScoreAverage() int {
+	return soa.TeamTotalBonusScoreSum / soa.Len()
 }
 
 func (soa *CharaResultSoA) append(charaResult CharaResult) {
