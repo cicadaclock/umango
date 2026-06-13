@@ -12,12 +12,16 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/storage"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/cicadaclock/umango/internal/pkg/data"
 	"github.com/cicadaclock/umango/internal/pkg/races"
 	"github.com/cicadaclock/umango/internal/pkg/ui/app_theme"
 	centersteppedlayout "github.com/cicadaclock/umango/internal/pkg/ui/center_stepped_layout"
 	"github.com/cicadaclock/umango/internal/pkg/ui/veteranwidget"
+	"github.com/s-daehling/fyne-charts/pkg/coord"
+	gdata "github.com/s-daehling/fyne-charts/pkg/data"
+	"github.com/s-daehling/fyne-charts/pkg/style"
 )
 
 var (
@@ -73,14 +77,50 @@ func mainMenu(dataStore *data.DataStore, window fyne.Window) *fyne.Container {
 	tabs := container.NewAppTabs(
 		container.NewTabItem("Veterans", createTable()),
 		container.NewTabItem("Optimizer", defaultWidget()),
-		container.NewTabItem("Temp", temp(dataStore, window)),
+		container.NewTabItem("Veteran List", createVeteranList(dataStore, window)),
+		container.NewTabItem("TT Chart", createTeamTrialsChart()),
 	)
 	tabs.SetTabLocation(container.TabLocationTop)
 	c := container.NewStack(tabs)
 	return c
 }
 
-func temp(dataStore *data.DataStore, window fyne.Window) *fyne.Container {
+func createTeamTrialsChart() *fyne.Container {
+	// Get data, hardcoded for now
+	home, _ := os.UserHomeDir()
+	results, _ := races.LoadRaceResultsFolder(filepath.Join(home, "Documents", "Saved races", "Team trials"))
+	soa := races.NewRaceResultsSoA(results)
+	// charaResults := soa.CharaResultSoA()
+	// for trainedCharaId, resultSoA := range charaResults {
+	// }
+
+	chart := coord.NewCartesianNumericalChart("Title of Example Chart")
+	chart.SetXAxisLabel("Samples")
+	chart.SetYAxisLabel("Score")
+
+	pal := style.NewPaletteTriadic(theme.ColorNamePrimary)
+	pal = style.NewPaletteLightDarkSet(pal.Names())
+	for i := 1; i <= 5; i++ {
+		raceByType := soa.FilterByDistanceType(i)
+		numData := []gdata.NumericalPoint{}
+		for i, totalScore := range raceByType.TeamTotalScores {
+			point := gdata.NumericalPoint{
+				N:   float64(i),
+				Val: float64(totalScore),
+			}
+			numData = append(numData, point)
+		}
+		nps, err := coord.NewNumericalPointSeries(string(rune(i)), pal.Next(), numData)
+		if err != nil {
+			log.Fatalf("fuck")
+		}
+		_ = chart.AddLineSeries(nps, true)
+	}
+
+	return container.NewBorder(nil, nil, nil, nil, chart)
+}
+
+func createVeteranList(dataStore *data.DataStore, window fyne.Window) *fyne.Container {
 	veteranWidget := veteranwidget.NewVeteranWidget(dataStore)
 	content := centersteppedlayout.NewHStepped(0.6, 0.8, veteranWidget)
 	veteranFileDialog := dialog.NewFileOpen(

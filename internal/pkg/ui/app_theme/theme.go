@@ -5,6 +5,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/theme"
+	"github.com/s-daehling/fyne-charts/pkg/style"
 )
 
 const (
@@ -32,14 +33,16 @@ var (
 )
 
 type AppTheme struct {
-	DefaultFont []byte
+	DefaultTheme fyne.Theme
+	DefaultFont  []byte
 }
 
 var _ fyne.Theme = (*AppTheme)(nil)
 
 func NewAppTheme(defaultFont []byte) AppTheme {
 	return AppTheme{
-		DefaultFont: defaultFont,
+		DefaultFont:  defaultFont,
+		DefaultTheme: style.NewColorPaletteTheme(theme.DefaultTheme()),
 	}
 }
 
@@ -62,11 +65,12 @@ func (m AppTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) col
 	case theme.ColorNameBackground:
 		return colorBackground
 	}
-	return theme.DefaultTheme().Color(name, variant)
+
+	return m.DefaultTheme.Color(name, variant)
 }
 
 func (m AppTheme) Icon(name fyne.ThemeIconName) fyne.Resource {
-	return theme.DefaultTheme().Icon(name)
+	return m.DefaultTheme.Icon(name)
 }
 
 func (m AppTheme) Font(style fyne.TextStyle) fyne.Resource {
@@ -79,5 +83,5 @@ func (m AppTheme) Size(name fyne.ThemeSizeName) float32 {
 	case FontSizeVeteranWidget:
 		return 14.0
 	}
-	return theme.DefaultTheme().Size(name)
+	return m.DefaultTheme.Size(name)
 }
