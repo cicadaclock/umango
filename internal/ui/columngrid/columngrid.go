@@ -1,4 +1,4 @@
-package ui
+package columngrid
 
 import (
 	"image/color"
