@@ -30,6 +30,18 @@ const (
 
 var distances = []DistanceType{Sprint, Mile, Medium, Long, Dirt}
 
+type RunStyle int
+
+const (
+	_              = iota
+	Front RunStyle = iota
+	Pace
+	Late
+	End
+)
+
+var runStyles = []RunStyle{Front, Pace, Late, End}
+
 func TeamTrialsChart() *fyne.Container {
 	// Get data, hardcoded for now
 	home, _ := os.UserHomeDir()
@@ -90,6 +102,20 @@ func (dt DistanceType) String() string {
 		return "Long"
 	case Dirt:
 		return "Dirt"
+	}
+	return ""
+}
+
+func (rs RunStyle) String() string {
+	switch rs {
+	case Front:
+		return "Front"
+	case Pace:
+		return "Pace"
+	case Late:
+		return "Late"
+	case End:
+		return "End"
 	}
 	return ""
 }
