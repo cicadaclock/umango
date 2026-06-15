@@ -17,7 +17,7 @@ func TestRaceResultsSoA(t *testing.T) {
 	if soa.Len() != 5 {
 		t.Fatalf("Len() == %d, want 5", soa.Len())
 	}
-	if len(soa.TeamTotalScores) != 5 || len(soa.CharaResultArrays) != 5 {
+	if soa.TeamTotalScores.Len() != 5 || len(soa.CharaResultArrays) != 5 {
 		t.Fatal("SoA slices not parallel to race count")
 	}
 
@@ -26,8 +26,8 @@ func TestRaceResultsSoA(t *testing.T) {
 	if mile.Len() != 1 {
 		t.Fatalf("mile.Len() == %d, want 1", mile.Len())
 	}
-	if mile.TeamTotalScores[0] != 142642 {
-		t.Errorf("TeamTotalScores[0] == %d, want 142642", mile.TeamTotalScores[0])
+	if mile.TeamTotalScores.Get(0) != 142642 {
+		t.Errorf("TeamTotalScores[0] == %d, want 142642", mile.TeamTotalScores.Get(0))
 	}
 
 	// Chara 2984 only raced in round 1

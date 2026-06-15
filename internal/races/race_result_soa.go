@@ -6,22 +6,18 @@ import (
 )
 
 type RaceResultsSoA struct {
-	TeamTotalScoreSum      int
-	TeamTotalBonusScoreSum int
-	DistanceTypes          []int
-	TeamTotalScores        []int
-	TeamTotalBonusScores   []int
-	WinTypes               []int
-	CharaResultArrays      [][]CharaResult
+	DistanceTypes        []int
+	TeamTotalScores      ScoreArray
+	TeamTotalBonusScores ScoreArray
+	WinTypes             []int
+	CharaResultArrays    [][]CharaResult
 }
 
 type CharaResultSoA struct {
 	TotalScoreSum int
 	BonusScoreSum int
-	// TotalScore    []int
-	// BonusScore    []int
-	TotalScore ScoreArray
-	BonusScore ScoreArray
+	TotalScore    ScoreArray
+	BonusScore    ScoreArray
 }
 
 type ScoreArray struct {
@@ -40,7 +36,6 @@ func NewRaceResultsSoA(raceResults []RaceResult) RaceResultsSoA {
 func makeRaceResultsSoA(capacity int) RaceResultsSoA {
 	return RaceResultsSoA{
 		DistanceTypes:     make([]int, 0, capacity),
-		TeamTotalScores:   make([]int, 0, capacity),
 		WinTypes:          make([]int, 0, capacity),
 		CharaResultArrays: make([][]CharaResult, 0, capacity),
 	}
@@ -48,13 +43,10 @@ func makeRaceResultsSoA(capacity int) RaceResultsSoA {
 
 func (soa *RaceResultsSoA) appendRace(raceResult RaceResult) {
 	soa.DistanceTypes = append(soa.DistanceTypes, raceResult.DistanceType)
-	soa.TeamTotalScores = append(soa.TeamTotalScores, raceResult.TeamTotalScore)
-	soa.TeamTotalScoreSum += raceResult.TeamTotalScore
-	bonusScore := raceResult.BonusScore()
-	soa.TeamTotalBonusScores = append(soa.TeamTotalBonusScores, bonusScore)
-	soa.TeamTotalBonusScoreSum += bonusScore
 	soa.WinTypes = append(soa.WinTypes, raceResult.WinType)
 	soa.CharaResultArrays = append(soa.CharaResultArrays, raceResult.CharaResultArray)
+	soa.TeamTotalScores.append(raceResult.TeamTotalScore)
+	soa.TeamTotalBonusScores.append(raceResult.BonusScore())
 }
 
 // Returns the number of unique player trainedCharaIds in the race result set
@@ -91,15 +83,15 @@ func (soa RaceResultsSoA) CharaResultSoA() map[int]*CharaResultSoA {
 }
 
 func (soa RaceResultsSoA) Len() int {
-	return len(soa.TeamTotalScores)
+	return len(soa.DistanceTypes)
 }
 
-func (soa RaceResultsSoA) get(index int) RaceResult {
+func (soa RaceResultsSoA) get(i int) RaceResult {
 	return RaceResult{
-		DistanceType:     soa.DistanceTypes[index],
-		TeamTotalScore:   soa.TeamTotalScores[index],
-		WinType:          soa.WinTypes[index],
-		CharaResultArray: soa.CharaResultArrays[index],
+		DistanceType:     soa.DistanceTypes[i],
+		TeamTotalScore:   soa.TeamTotalScores.Get(i),
+		WinType:          soa.WinTypes[i],
+		CharaResultArray: soa.CharaResultArrays[i],
 	}
 }
 
@@ -139,11 +131,11 @@ func (soa RaceResultsSoA) CharaTotalScores() []int {
 }
 
 func (soa RaceResultsSoA) TotalScoreAverage() int {
-	return soa.TeamTotalScoreSum / soa.Len()
+	return soa.TeamTotalScores.Average()
 }
 
 func (soa RaceResultsSoA) BonusScoreAverage() int {
-	return soa.TeamTotalBonusScoreSum / soa.Len()
+	return soa.TeamTotalBonusScores.Average()
 }
 
 func (soa *CharaResultSoA) append(charaResult CharaResult) {
@@ -168,6 +160,10 @@ func (s ScoreArray) Average() int {
 
 func (s ScoreArray) Len() int {
 	return len(s.Score)
+}
+
+func (s ScoreArray) Get(i int) int {
+	return s.Score[i]
 }
 
 // Filter selects only the elements that match the provided indices
