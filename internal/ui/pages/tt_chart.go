@@ -36,8 +36,8 @@ func TeamTrialsChart() *fyne.Container {
 
 		// Populate chart
 		finalScoreData := []gdata.NumericalPoint{}
-		for i := range raceByType.TeamTotalScores {
-			totalScore := raceByType.TeamTotalScores[i]
+		for i := range raceByType.TeamTotalScores.Score {
+			totalScore := raceByType.TeamTotalScores.Get(i)
 			point := gdata.NumericalPoint{
 				N:   float64(i),
 				Val: float64(totalScore),
