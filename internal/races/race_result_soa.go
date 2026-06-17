@@ -6,7 +6,7 @@ import (
 )
 
 type RaceResultsSoA struct {
-	DistanceTypes        []int
+	DistanceTypes        []DistanceType
 	TeamTotalScores      ScoreArray
 	TeamTotalBonusScores ScoreArray
 	WinTypes             []int
@@ -35,14 +35,14 @@ func NewRaceResultsSoA(raceResults []RaceResult) RaceResultsSoA {
 
 func makeRaceResultsSoA(capacity int) RaceResultsSoA {
 	return RaceResultsSoA{
-		DistanceTypes:     make([]int, 0, capacity),
+		DistanceTypes:     make([]DistanceType, 0, capacity),
 		WinTypes:          make([]int, 0, capacity),
 		CharaResultArrays: make([][]CharaResult, 0, capacity),
 	}
 }
 
 func (soa *RaceResultsSoA) appendRace(raceResult RaceResult) {
-	soa.DistanceTypes = append(soa.DistanceTypes, raceResult.DistanceType)
+	soa.DistanceTypes = append(soa.DistanceTypes, DistanceType(raceResult.DistanceType))
 	soa.WinTypes = append(soa.WinTypes, raceResult.WinType)
 	soa.CharaResultArrays = append(soa.CharaResultArrays, raceResult.CharaResultArray)
 	soa.TeamTotalScores.append(raceResult.TeamTotalScore)
@@ -88,7 +88,7 @@ func (soa RaceResultsSoA) Len() int {
 
 func (soa RaceResultsSoA) get(i int) RaceResult {
 	return RaceResult{
-		DistanceType:     soa.DistanceTypes[i],
+		DistanceType:     int(soa.DistanceTypes[i]),
 		TeamTotalScore:   soa.TeamTotalScores.Get(i),
 		WinType:          soa.WinTypes[i],
 		CharaResultArray: soa.CharaResultArrays[i],
@@ -98,7 +98,7 @@ func (soa RaceResultsSoA) get(i int) RaceResult {
 func (soa RaceResultsSoA) FilterByDistanceType(distanceType int) RaceResultsSoA {
 	filtered := makeRaceResultsSoA(soa.Len())
 	for i := range soa.DistanceTypes {
-		if soa.DistanceTypes[i] == distanceType {
+		if soa.DistanceTypes[i] == DistanceType(distanceType) {
 			filtered.appendRace(soa.get(i))
 		}
 	}
