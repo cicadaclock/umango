@@ -8,9 +8,8 @@ import (
 	"path/filepath"
 )
 
-func LoadRaceResultsFolder(directoryPath string) ([]RaceResult, error) {
-	// 20 TT samples, 5 race results per TT sample = 100 results
-	allRaceResults := make([]RaceResult, 0, 100)
+func LoadRacesFolder(directoryPath string) ([]TeamTrialRace, error) {
+	allRaceResults := make([]TeamTrialRace, 0, 100)
 	filepath.WalkDir(directoryPath, func(path string, d fs.DirEntry, err error) error {
 		if d.IsDir() {
 			return nil
@@ -18,30 +17,28 @@ func LoadRaceResultsFolder(directoryPath string) ([]RaceResult, error) {
 			return nil
 		}
 
-		raceResults, err := LoadRaceResults(path)
+		teamTrialRaceResult, err := LoadRaces(path)
 		// If parsing race results fails, just skip it
 		if err != nil {
 			return nil
 		}
-		allRaceResults = append(allRaceResults, raceResults...)
+		allRaceResults = append(allRaceResults, teamTrialRaceResult)
 		return nil
 	})
 	return allRaceResults, nil
 }
 
-func LoadRaceResults(path string) ([]RaceResult, error) {
+func LoadRaces(path string) (TeamTrialRace, error) {
+	var teamTrialRace TeamTrialRace
 	if path == "" {
-		return nil, fmt.Errorf("empty path")
+		return teamTrialRace, fmt.Errorf("empty path")
 	}
 	file, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("read file %s: %w", path, err)
+		return teamTrialRace, fmt.Errorf("read file %s: %w", path, err)
 	}
-	var teamTrial struct {
-		RaceResultArray []RaceResult `json:"race_result_array"`
+	if err := json.Unmarshal(file, &teamTrialRace); err != nil {
+		return teamTrialRace, fmt.Errorf("unmarshal: %w", err)
 	}
-	if err := json.Unmarshal(file, &teamTrial); err != nil {
-		return nil, fmt.Errorf("unmarshal: %w", err)
-	}
-	return teamTrial.RaceResultArray, nil
+	return teamTrialRace, nil
 }

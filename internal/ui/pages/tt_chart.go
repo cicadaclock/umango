@@ -20,8 +20,12 @@ import (
 func TeamTrialsChart() *fyne.Container {
 	// Get data, hardcoded for now
 	home, _ := os.UserHomeDir()
-	results, _ := races.LoadRaceResultsFolder(filepath.Join(home, "Documents", "Saved races", "Team trials"))
-	soa := races.NewRaceResultsSoA(results)
+	results, _ := races.LoadRacesFolder(filepath.Join(home, "Documents", "Saved races", "Team trials"))
+	raceResultArray := make([]races.RaceResult, 500)
+	for _, ttr := range results {
+		raceResultArray = append(raceResultArray, ttr.RaceResultArray...)
+	}
+	soa := races.NewRaceResultsSoA(raceResultArray)
 
 	chart := coord.NewCartesianNumericalChart("Total scores per distance")
 	chart.SetXAxisLabel("Samples")
