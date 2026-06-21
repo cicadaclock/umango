@@ -8,12 +8,12 @@ import (
 
 func TestRaceResultsSoA(t *testing.T) {
 	path := filepath.Join("..", "testdata", "team_trial.json")
-	results, err := LoadRaceResults(path)
+	results, err := LoadRaces(path)
 	if err != nil {
 		t.Fatalf("load race results: %v", err)
 	}
 
-	soa := NewRaceResultsSoA(results)
+	soa := NewRaceResultsSoA(results.RaceResultArray)
 	if soa.Len() != 5 {
 		t.Fatalf("Len() == %d, want 5", soa.Len())
 	}
