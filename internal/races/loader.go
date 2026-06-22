@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 )
 
-func LoadRacesFolder(directoryPath string) ([]TeamTrialRace, error) {
-	allRaceResults := make([]TeamTrialRace, 0, 100)
+func LoadRacesFolder(directoryPath string) (TeamTrialResultSet, error) {
+	resultSet := TeamTrialResultSet{}
 	filepath.WalkDir(directoryPath, func(path string, d fs.DirEntry, err error) error {
 		if d.IsDir() {
 			return nil
@@ -17,24 +17,24 @@ func LoadRacesFolder(directoryPath string) ([]TeamTrialRace, error) {
 			return nil
 		}
 
-		teamTrialRaceResult, err := LoadRaces(path)
+		teamTrialResult, err := LoadRaces(path)
 		// If parsing race results fails, just skip it
 		if err != nil {
 			return nil
 		}
-		if len(teamTrialRaceResult.RaceResultArray) != len(teamTrialRaceResult.RaceStartParamsArray) {
+		if len(teamTrialResult.RaceResultArray) != len(teamTrialResult.RaceStartParamsArray) {
 			return nil
 		}
 
-		allRaceResults = append(allRaceResults, teamTrialRaceResult)
+		resultSet.append(teamTrialResult)
 		return nil
 	})
 
-	return allRaceResults, nil
+	return resultSet, nil
 }
 
-func LoadRaces(path string) (TeamTrialRace, error) {
-	var teamTrialRace TeamTrialRace
+func LoadRaces(path string) (TeamTrialResult, error) {
+	var teamTrialRace TeamTrialResult
 	if path == "" {
 		return teamTrialRace, fmt.Errorf("empty path")
 	}
