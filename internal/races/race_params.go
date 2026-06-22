@@ -18,12 +18,13 @@ type RaceStartParams struct {
 // Similar to veteran but some fields have different names and some are
 // irrelevant to veterans so a new struct is used
 type RaceHorseData struct {
-	Distance       DistanceType
-	TrainerName    string `json:"trainer_name"`
-	TrainedCharaId int    `json:"trained_chara_id"`
-	CardId         int    `json:"card_id"`
-	CharaId        int    `json:"chara_id"`
-	TalentLevel    int    `json:"talent_level"`
+	Distance    DistanceType
+	TrainerName string `json:"trainer_name"`
+	// Unique chara ID
+	TrainedCharaId int `json:"trained_chara_id"`
+	// Chara info (so we can tell apart alts)
+	CardId      int `json:"card_id"`
+	TalentLevel int `json:"talent_level"`
 	// Starting gate
 	FrameOrder int             `json:"frame_order"`
 	SkillArray []veteran.Skill `json:"skill_array"`
