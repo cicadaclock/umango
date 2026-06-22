@@ -11,13 +11,29 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
+	"fyne.io/fyne/v2/widget"
 	"github.com/cicadaclock/umango/internal/races"
 	"github.com/s-daehling/fyne-charts/pkg/coord"
 	gdata "github.com/s-daehling/fyne-charts/pkg/data"
 	"github.com/s-daehling/fyne-charts/pkg/style"
 )
 
-func TeamTrialsChart() *fyne.Container {
+func NewTeamTrialsPage() *fyne.Container {
+	// Get data, hardcoded path for now
+	home, _ := os.UserHomeDir()
+	results, _ := races.LoadRacesFolder(filepath.Join(home, "Documents", "Saved races", "Team trials"))
+	size := len(results) * 5
+	raceResultArray := make([]races.RaceResult, size)
+	raceParamsArray := make([]races.RaceStartParams, size)
+	for _, ttr := range results {
+		raceResultArray = append(raceResultArray, ttr.RaceResultArray...)
+		raceParamsArray = append(raceParamsArray, ttr.RaceStartParamsArray...)
+	}
+
+	return container.NewStack(newVetTable())
+}
+
+func newTeamTrialsChart() *fyne.Container {
 	// Get data, hardcoded for now
 	home, _ := os.UserHomeDir()
 	results, _ := races.LoadRacesFolder(filepath.Join(home, "Documents", "Saved races", "Team trials"))
@@ -67,4 +83,45 @@ func TeamTrialsChart() *fyne.Container {
 
 	page := container.NewBorder(nil, raceAveragesContainer, nil, nil, chart)
 	return page
+}
+
+// newVetTable summarizes all sampled races
+func newVetTable() *fyne.Container {
+	headers := []string{
+		"Name",
+		"# Races",
+		"Max",
+		"Avg",
+	}
+
+	// column-oriented for better data parsing
+	var cols [][]string
+
+	table := widget.NewTable(
+		func() (int, int) {
+			return len(cols), len(headers)
+		},
+		func() fyne.CanvasObject {
+			return widget.NewLabel("")
+		},
+		func(id widget.TableCellID, cell fyne.CanvasObject) {
+			cell.(*widget.Label).SetText(cols[id.Col][id.Row])
+		},
+	)
+
+	table.ShowHeaderRow = true
+	table.CreateHeader = func() fyne.CanvasObject {
+		return widget.NewLabel("")
+	}
+	table.UpdateHeader = func(id widget.TableCellID, cell fyne.CanvasObject) {
+		label := cell.(*widget.Label)
+		label.TextStyle.Bold = true
+		label.SetText(headers[id.Col])
+	}
+
+	for col, header := range headers {
+		table.SetColumnWidth(col, float32(len(header))*9+24)
+	}
+
+	return container.NewStack(table)
 }
