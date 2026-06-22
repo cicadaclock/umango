@@ -22,9 +22,14 @@ func LoadRacesFolder(directoryPath string) ([]TeamTrialRace, error) {
 		if err != nil {
 			return nil
 		}
+		if len(teamTrialRaceResult.RaceResultArray) != len(teamTrialRaceResult.RaceStartParamsArray) {
+			return nil
+		}
+
 		allRaceResults = append(allRaceResults, teamTrialRaceResult)
 		return nil
 	})
+
 	return allRaceResults, nil
 }
 
