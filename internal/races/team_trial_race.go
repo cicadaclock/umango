@@ -12,7 +12,7 @@ type TeamTrialResult struct {
 	RaceResultArray      []RaceResult      `json:"race_result_array"`
 }
 
-func (ttrs TeamTrialResultSet) append(ttr TeamTrialResult) {
+func (ttrs *TeamTrialResultSet) append(ttr TeamTrialResult) {
 	ttrs.Set = append(ttrs.Set, ttr)
 }
 
