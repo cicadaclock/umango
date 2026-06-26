@@ -22,7 +22,11 @@ func LoadRacesFolder(directoryPath string) (TeamTrialResultSet, error) {
 		if err != nil {
 			return nil
 		}
-		if len(teamTrialResult.RaceResultArray) != len(teamTrialResult.RaceStartParamsArray) {
+		// Check correctness of data
+		if !teamTrialResult.HasCorrectRaceCount() {
+			return nil
+		}
+		if !teamTrialResult.IsInAscendingOrder() {
 			return nil
 		}
 
