@@ -20,6 +20,7 @@ type RaceStartParams struct {
 type RaceHorseData struct {
 	Distance    DistanceType
 	TrainerName string `json:"trainer_name"`
+	TeamId      int    `json:"team_id"`
 	// Unique chara ID
 	TrainedCharaId int `json:"trained_chara_id"`
 	// Chara info (so we can tell apart alts)
@@ -52,4 +53,21 @@ type RaceHorseData struct {
 	ProperGroundDirt int `json:"proper_ground_dirt"`
 	// Mood
 	Motivation int `json:"motivation"`
+}
+
+// Filters RaceHorseDataArray for only our umas
+func (rsp RaceStartParams) GetMyUmas() []RaceHorseData {
+	// 3 umas per race
+	umas := make([]RaceHorseData, 0, 3)
+	for _, rhd := range rsp.RaceHorseDataArray {
+		if rhd.ThatsMyUma() {
+			umas = append(umas, rhd)
+		}
+	}
+	return umas
+}
+
+// Checks if this uma belongs to our account
+func (rhd RaceHorseData) ThatsMyUma() bool {
+	return rhd.TeamId == 1
 }
