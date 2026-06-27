@@ -22,15 +22,9 @@ func NewTeamTrialsPage() *fyne.Container {
 	// Get data, hardcoded path for now
 	home, _ := os.UserHomeDir()
 	resultSet, _ := races.LoadRacesFolder(filepath.Join(home, "Documents", "Saved races", "Team trials"))
-	size := len(resultSet.Set) * 5
-	raceResultArray := make([]races.RaceResult, size)
-	raceParamsArray := make([]races.RaceStartParams, size)
-	for _, ttr := range resultSet.Set {
-		raceResultArray = append(raceResultArray, ttr.RaceResultArray...)
-		raceParamsArray = append(raceParamsArray, ttr.RaceStartParamsArray...)
-	}
+	tableData := races.NewTableData(resultSet)
 
-	return container.NewStack(newVetTable())
+	return container.NewStack(newVetTable(tableData))
 }
 
 func newTeamTrialsChart() *fyne.Container {
@@ -86,13 +80,8 @@ func newTeamTrialsChart() *fyne.Container {
 }
 
 // newVetTable summarizes all sampled races
-func newVetTable() *fyne.Container {
-	headers := []string{
-		"Name",
-		"# Races",
-		"Max",
-		"Avg",
-	}
+func newVetTable(tableData races.TableData) *fyne.Container {
+	headers := tableData.Headers()
 
 	// column-oriented for better data parsing
 	var cols [][]string
