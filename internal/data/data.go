@@ -24,8 +24,6 @@ type DataStore struct {
 	VeteranCardId map[int]string
 	// Veteran card ID to chara name
 	CharaNames map[int]string
-
-	VeteransJsonFilePath string
 }
 
 // Load DB tables into memory

@@ -25,8 +25,10 @@ func VeteranList(dataStore *data.DataStore, window fyne.Window) *fyne.Container 
 			}
 			if reader != nil {
 				defer reader.Close()
-				dataStore.VeteransJsonFilePath = reader.URI().Path()
-				veteranWidget.Load()
+				if err := veteranWidget.Load(reader.URI().Path()); err != nil {
+					dialog.ShowError(err, window)
+					return
+				}
 				content.Refresh()
 			}
 		},
