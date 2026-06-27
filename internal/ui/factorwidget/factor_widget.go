@@ -9,8 +9,14 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
-	"github.com/cicadaclock/umango/internal/data"
 )
+
+// FactorData provides the functions this widget needs from DataStore
+type FactorData interface {
+	FactorNames(ids []int) []string
+	FactorClass(ids []int) []int
+	FactorLevels(ids []int) []int
+}
 
 type FactorWidget struct {
 	widget.BaseWidget
@@ -37,7 +43,7 @@ type FactorWidget struct {
 
 	// Internal data
 
-	dataStore      *data.DataStore // dataStore has transformations for our data
+	mapper         FactorData      // mapper provides factor data lookups
 	factorSuffixes []string        // factorSuffixes is the array of stars (or other suffixes) appended to each factor
 	redFactors     *fyne.Container // redFactors is the view of all red factors
 	greenFactors   *fyne.Container // greenFactors is the view of all green factors
@@ -48,12 +54,12 @@ type FactorWidget struct {
 }
 
 func NewFactorWidget(
-	dataStore *data.DataStore,
+	mapper FactorData,
 	veteranId int,
 	factors, factorsP1, factorsP2 []int,
 ) *FactorWidget {
 	return NewFactorWidgetWithStyle(
-		dataStore,
+		mapper,
 		veteranId,
 		factors, factorsP1, factorsP2,
 		StarSuffix,
@@ -64,7 +70,7 @@ func NewFactorWidget(
 
 // NewFactorWidgetWithStyle creates a new label widget with the set text content
 func NewFactorWidgetWithStyle(
-	dataStore *data.DataStore,
+	mapper FactorData,
 	veteranId int,
 	factors, factorsP1, factorsP2 []int,
 	suffixType SuffixType,
@@ -72,7 +78,7 @@ func NewFactorWidgetWithStyle(
 	topPadding, bottomPadding, leftPadding, rightPadding float32,
 ) *FactorWidget {
 	f := &FactorWidget{
-		dataStore:     dataStore,
+		mapper:        mapper,
 		VeteranId:     veteranId,
 		Factors:       factors,
 		FactorsP1:     factorsP1,
@@ -160,9 +166,9 @@ func (f *FactorWidget) addFactorsFromLegacyType(legacyType LegacyType) {
 		return
 	}
 
-	factorNames := f.dataStore.MapFactorNames(factors)
-	factorTypes := f.dataStore.MapFactorTypes(factors)
-	factorLevels := f.dataStore.FactorLevels(factors)
+	factorNames := f.mapper.FactorNames(factors)
+	factorTypes := f.mapper.FactorClass(factors)
+	factorLevels := f.mapper.FactorLevels(factors)
 	factorSuffixes := newSuffixes(factorLevels, f.SuffixType)
 	factorTexts := newRichTexts(factorNames, factorSuffixes, factorTypes, legacyType, f.SizeName)
 	factorRects := newRects(factorTypes, f.StrokeWidth, f.CornerRadius)

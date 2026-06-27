@@ -38,7 +38,7 @@ func TestFactorNames(t *testing.T) {
 		"Murmur",
 		"Lucky Seven",
 	}
-	result := dataStore.MapFactorNames(factorIds)
+	result := dataStore.FactorNames(factorIds)
 	if !reflect.DeepEqual(result, want) {
 		t.Errorf("factor ids: %v\nGot: %v\nWant: %v", factorIds, result, want)
 	}
@@ -48,7 +48,7 @@ func TestMapVeteranCardIdToCharaId(t *testing.T) {
 	dataStore := setup(t)
 
 	veteranCardId := []int{101801}
-	result := dataStore.MapVeteranCardIdToCharaId(veteranCardId)
+	result := dataStore.VeteranCardChara(veteranCardId)
 	want := []int{1018}
 	if !reflect.DeepEqual(result, want) {
 		t.Errorf("MapVeteranCardIdToCharaName(%d) == \"%d\", want: %d", veteranCardId, result, want)
@@ -59,7 +59,7 @@ func TestMapVeteranCardIdToCharaName(t *testing.T) {
 	dataStore := setup(t)
 
 	veteranCardId := []int{101801}
-	result := dataStore.MapVeteranCardIdToCharaName(veteranCardId)
+	result := dataStore.VeteranCardCharaName(veteranCardId)
 	want := []string{"Air Groove"}
 	if !reflect.DeepEqual(result, want) {
 		t.Errorf("MapVeteranCardIdToCharaName(%d) == \"%s\", want: %s", veteranCardId, result, want)
@@ -70,7 +70,7 @@ func TestMapVeteranCardIdToCharaTitle(t *testing.T) {
 	dataStore := setup(t)
 
 	veteranCardId := []int{101801}
-	result := dataStore.MapVeteranCardIdToCharaTitle(veteranCardId)
+	result := dataStore.VeteranCardCharaTitle(veteranCardId)
 	want := []string{"[Empress Road] Air Groove"}
 	if !reflect.DeepEqual(result, want) {
 		t.Errorf("MapVeteranCardIdToCharaName(%d) == \"%s\", want: %s", veteranCardId, result, want)

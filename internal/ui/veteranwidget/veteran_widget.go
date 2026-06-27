@@ -6,7 +6,6 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
-	"github.com/cicadaclock/umango/internal/data"
 	"github.com/cicadaclock/umango/internal/ui/factorwidget"
 	"github.com/cicadaclock/umango/internal/veteran"
 )
@@ -20,18 +19,18 @@ const (
 type VeteranWidget struct {
 	widget.BaseWidget
 	VeteranSlice    *veteran.VeteranSlice
-	dataStore       *data.DataStore
+	mapper          factorwidget.FactorData
 	veteranFilePath string
 	widgets         []*factorwidget.FactorWidget
 	list            *widget.List
 }
 
 func NewVeteranWidget(
-	dataStore *data.DataStore,
+	mapper factorwidget.FactorData,
 ) *VeteranWidget {
 	v := &VeteranWidget{
 		VeteranSlice: &veteran.VeteranSlice{},
-		dataStore:    dataStore,
+		mapper:       mapper,
 	}
 
 	v.addFactorWidgets()
@@ -95,7 +94,7 @@ func (v *VeteranWidget) addFactorWidgets() {
 		}
 
 		// Set widget visuals and data
-		widget := factorwidget.NewFactorWidget(v.dataStore, v.VeteranSlice.LocalVeteranId[i], factors, factorsP1, factorsP2)
+		widget := factorwidget.NewFactorWidget(v.mapper, v.VeteranSlice.LocalVeteranId[i], factors, factorsP1, factorsP2)
 		widget.SetPadding(-3, -3, 5, 5)
 		widget.CornerRadius = factorCornerRadius
 		widget.SetFactors(factors, factorsP1, factorsP2)
