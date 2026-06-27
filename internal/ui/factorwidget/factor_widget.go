@@ -13,8 +13,11 @@ import (
 
 // FactorData provides the functions this widget needs from DataStore
 type FactorData interface {
+	// Maps factor ID to factor name
 	FactorNames(ids []int) []string
+	// Maps factor ID to factor type
 	FactorClass(ids []int) []int
+	// Maps factor ID to factor level
 	FactorLevels(ids []int) []int
 }
 
