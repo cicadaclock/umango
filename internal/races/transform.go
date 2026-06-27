@@ -2,6 +2,7 @@ package races
 
 type TableData struct {
 	TrainedCharaIds []int
+	NumRaces        []int
 	MaxScores       []int
 	AvgScores       []int
 }
@@ -18,10 +19,12 @@ func NewTableData(ttrs TeamTrialResultSet) TableData {
 	}
 
 	trainedCharaIds := make([]int, 0, len(scores))
+	numRaces := make([]int, 0, len(scores))
 	maxScores := make([]int, 0, len(scores))
 	avgScores := make([]int, 0, len(scores))
 	for trainedCharaId, scoreArray := range scores {
 		trainedCharaIds = append(trainedCharaIds, trainedCharaId)
+		numRaces = append(numRaces, scoreArray.Len())
 		avgScores = append(avgScores, scoreArray.Average())
 		maxScores = append(maxScores, scoreArray.Max())
 	}
