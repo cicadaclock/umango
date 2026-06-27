@@ -82,7 +82,7 @@ func newTeamTrialsChart() *fyne.Container {
 }
 
 // newVetTable summarizes all sampled races
-func newVetTable(tableData races.TableData) *fyne.Container {
+func newVetTable(tableData races.TableData) *widget.Table {
 	headers := tableData.Headers()
 
 	// column-oriented for better data parsing
@@ -90,29 +90,38 @@ func newVetTable(tableData races.TableData) *fyne.Container {
 
 	table := widget.NewTable(
 		func() (int, int) {
-			return len(cols), len(headers)
+			return tableData.Len(), len(headers)
 		},
 		func() fyne.CanvasObject {
 			return widget.NewLabel("")
 		},
 		func(id widget.TableCellID, cell fyne.CanvasObject) {
-			cell.(*widget.Label).SetText(cols[id.Col][id.Row])
+			label := cell.(*widget.Label)
+			text := cols[id.Col][id.Row]
+			// SetText calls Refresh(), so set the text only when we need to
+			if label.Text != text {
+				label.SetText(text)
+			}
 		},
 	)
 
 	table.ShowHeaderRow = true
 	table.CreateHeader = func() fyne.CanvasObject {
-		return widget.NewLabel("")
+		label := widget.NewLabel("")
+		label.TextStyle.Bold = true
+		return label
 	}
 	table.UpdateHeader = func(id widget.TableCellID, cell fyne.CanvasObject) {
 		label := cell.(*widget.Label)
-		label.TextStyle.Bold = true
-		label.SetText(headers[id.Col])
+		// SetText calls Refresh(), so set the text only when we need to
+		if label.Text != headers[id.Col] {
+			label.SetText(headers[id.Col])
+		}
 	}
 
 	for col, header := range headers {
 		table.SetColumnWidth(col, float32(len(header))*9+24)
 	}
 
-	return container.NewStack(table)
+	return table
 }
