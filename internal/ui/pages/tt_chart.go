@@ -24,7 +24,9 @@ func NewTeamTrialsPage() *fyne.Container {
 	resultSet, _ := races.LoadRacesFolder(filepath.Join(home, "Documents", "Saved races", "Team trials"))
 	tableData := races.NewTableData(resultSet)
 
-	return container.NewStack(newVetTable(tableData))
+	table := newVetTable(tableData)
+
+	return container.NewStack(table)
 }
 
 func newTeamTrialsChart() *fyne.Container {
@@ -84,7 +86,7 @@ func newVetTable(tableData races.TableData) *fyne.Container {
 	headers := tableData.Headers()
 
 	// column-oriented for better data parsing
-	var cols [][]string
+	cols := tableData.Columns()
 
 	table := widget.NewTable(
 		func() (int, int) {
