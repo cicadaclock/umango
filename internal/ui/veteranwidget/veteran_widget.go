@@ -19,10 +19,11 @@ const (
 
 type VeteranWidget struct {
 	widget.BaseWidget
-	VeteranSlice *veteran.VeteranSlice
-	dataStore    *data.DataStore
-	widgets      []*factorwidget.FactorWidget
-	list         *widget.List
+	VeteranSlice    *veteran.VeteranSlice
+	dataStore       *data.DataStore
+	veteranFilePath string
+	widgets         []*factorwidget.FactorWidget
+	list            *widget.List
 }
 
 func NewVeteranWidget(
@@ -64,8 +65,9 @@ func (v *VeteranWidget) CreateRenderer() fyne.WidgetRenderer {
 	return widget.NewSimpleRenderer(v.list)
 }
 
-func (v *VeteranWidget) Load() error {
-	vs, err := veteran.Init(v.dataStore.VeteransJsonFilePath)
+func (v *VeteranWidget) Load(path string) error {
+	v.veteranFilePath = path
+	vs, err := veteran.Init(v.veteranFilePath)
 	if err != nil {
 		return fmt.Errorf("load veterans: %w", err)
 	}
