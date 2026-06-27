@@ -60,6 +60,10 @@ func (td TableData) Headers() []string {
 // Columns returns the table contents in column-major order
 func (td TableData) Columns() [][]string {
 	cols := make([][]string, len(td.Headers()))
+	cols[0] = make([]string, 0, td.Len())
+	cols[1] = make([]string, 0, td.Len())
+	cols[2] = make([]string, 0, td.Len())
+	cols[3] = make([]string, 0, td.Len())
 	for i := range td.TrainedCharaIds {
 		cols[0] = append(cols[0], strconv.Itoa(td.TrainedCharaIds[i]))
 		cols[1] = append(cols[1], strconv.Itoa(td.NumRaces[i]))
