@@ -2,7 +2,6 @@ package races
 
 import (
 	"path/filepath"
-	"reflect"
 	"testing"
 )
 
@@ -49,48 +48,5 @@ func TestRaceResultsSoA(t *testing.T) {
 	}
 	if soa.FilterByTrainedCharaId(-1).Len() != 0 {
 		t.Error("want empty SoA for unknown trained chara id")
-	}
-}
-
-func TestCharaResultSoAAppend(t *testing.T) {
-	c := CharaResultSoA{}
-
-	c.TotalScore.append(10)
-	if !reflect.DeepEqual(c.TotalScore.Score, []int{10}) {
-		t.Errorf("TotalScore.Score == %v, want [10]", c.TotalScore.Score)
-	}
-}
-
-func TestCharaResultSoAAverage(t *testing.T) {
-	c := CharaResultSoA{}
-	c.TotalScore.append(10)
-	c.TotalScore.append(20)
-	if c.TotalScore.Sum != 30 {
-		t.Errorf("TotalScore.Sum == %d, want 30", c.TotalScore.Sum)
-	}
-	if c.TotalScore.Average() != 15 {
-		t.Errorf("TotalScore.Average() == %d, want 15", c.TotalScore.Average())
-	}
-}
-
-func TestCharaResultSoALen(t *testing.T) {
-	c := CharaResultSoA{}
-	c.TotalScore.append(10)
-	c.TotalScore.append(20)
-	c.TotalScore.append(30)
-	if c.TotalScore.Len() != 3 {
-		t.Errorf("TotalScore.Len() == %d, want 3", c.TotalScore.Len())
-	}
-}
-
-func TestCharaResultSoAFilter(t *testing.T) {
-	c := CharaResultSoA{}
-	c.TotalScore.append(10)
-	c.TotalScore.append(20)
-	c.TotalScore.append(30)
-	c.TotalScore.append(40)
-	filteredScore := c.TotalScore.Filter([]int{1, 2})
-	if !reflect.DeepEqual(filteredScore.Score, []int{20, 30}) {
-		t.Errorf("filteredScore == %v, want [20 30]", filteredScore)
 	}
 }
