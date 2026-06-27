@@ -42,7 +42,17 @@ func TestScoreArrayGet(t *testing.T) {
 	s.append(20)
 	s.append(30)
 	if s.Get(1) != 20 {
-		t.Errorf("s.Get() == %d, want 20", s.Get(1))
+		t.Errorf("s.Get(1) == %d, want 20", s.Get(1))
+	}
+}
+
+func TestScoreArrayMax(t *testing.T) {
+	s := ScoreArray{}
+	s.append(10)
+	s.append(20)
+	s.append(30)
+	if s.Max() != 30 {
+		t.Errorf("s.Max() == %d, want 30", s.Max())
 	}
 }
 
