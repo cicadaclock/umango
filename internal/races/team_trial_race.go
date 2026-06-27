@@ -38,3 +38,15 @@ func (ttr TeamTrialResult) HasCorrectRaceCount() bool {
 	}
 	return true
 }
+
+// Returns CharaResults for up to 15 umas in the race
+func (ttr TeamTrialResult) GetMyCharaResults() []CharaResult {
+	charaResults := make([]CharaResult, 0, 15)
+	for i := range 5 {
+		umas := ttr.RaceStartParamsArray[i].GetMyUmas()
+		for _, uma := range umas {
+			charaResults = append(charaResults, ttr.RaceResultArray[i].FindCharaResults(uma.TrainedCharaId))
+		}
+	}
+	return charaResults
+}
