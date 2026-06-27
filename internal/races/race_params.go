@@ -4,6 +4,7 @@ import "github.com/cicadaclock/umango/internal/veteran"
 
 // Starting parameters for a single team trial round
 type RaceStartParams struct {
+	Round           int `json:"round"`
 	Season          int `json:"season"`
 	Weather         int `json:"weather"`
 	GroundCondition int `json:"ground_condition"`
@@ -17,12 +18,14 @@ type RaceStartParams struct {
 // Similar to veteran but some fields have different names and some are
 // irrelevant to veterans so a new struct is used
 type RaceHorseData struct {
-	Distance       DistanceType
-	TrainerName    string `json:"trainer_name"`
-	TrainedCharaId int    `json:"trained_chara_id"`
-	CardId         int    `json:"card_id"`
-	CharaId        int    `json:"chara_id"`
-	TalentLevel    int    `json:"talent_level"`
+	Distance    DistanceType
+	TrainerName string `json:"trainer_name"`
+	TeamId      int    `json:"team_id"`
+	// Unique chara ID
+	TrainedCharaId int `json:"trained_chara_id"`
+	// Chara info (so we can tell apart alts)
+	CardId      int `json:"card_id"`
+	TalentLevel int `json:"talent_level"`
 	// Starting gate
 	FrameOrder int             `json:"frame_order"`
 	SkillArray []veteran.Skill `json:"skill_array"`
@@ -50,4 +53,21 @@ type RaceHorseData struct {
 	ProperGroundDirt int `json:"proper_ground_dirt"`
 	// Mood
 	Motivation int `json:"motivation"`
+}
+
+// Filters RaceHorseDataArray for only our umas
+func (rsp RaceStartParams) GetMyUmas() []RaceHorseData {
+	// 3 umas per race
+	umas := make([]RaceHorseData, 0, 3)
+	for _, rhd := range rsp.RaceHorseDataArray {
+		if rhd.ThatsMyUma() {
+			umas = append(umas, rhd)
+		}
+	}
+	return umas
+}
+
+// Checks if this uma belongs to our account
+func (rhd RaceHorseData) ThatsMyUma() bool {
+	return rhd.TeamId == 1
 }
