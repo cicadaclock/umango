@@ -30,3 +30,17 @@ func NewTableData(ttrs TeamTrialResultSet) TableData {
 	}
 	return result
 }
+
+func (td TableData) Len() int {
+	return len(td.TrainedCharaIds)
+}
+
+func (td TableData) Headers() []string {
+	headers := []string{
+		"Name",
+		"# Races",
+		"Max",
+		"Avg",
+	}
+	return headers
+}
