@@ -11,19 +11,19 @@ import (
 
 // Anything we want to store as a single source of data
 type DataStore struct {
-	CardData                  map[int]int
-	SuccessionRelations       map[int]int
-	SuccessionRelationMembers map[int][]int
-	FactorType                map[int]int
-	TTRawScores               map[int]int
+	cardData                  map[int]int
+	successionRelations       map[int]int
+	successionRelationMembers map[int][]int
+	factorType                map[int]int
+	ttRawScores               map[int]int
 
 	// Text mappings
 	// Factor ID to factor name
-	FactorNames map[int]string
+	factorNames map[int]string
 	// Veteran card ID to full chara title + name
-	VeteranCardId map[int]string
+	veteranCardId map[int]string
 	// Veteran card ID to chara name
-	CharaNames map[int]string
+	charaNames map[int]string
 }
 
 // Load DB tables into memory
@@ -40,14 +40,14 @@ func Init() (*DataStore, error) {
 
 	// Store DB results into memory
 	var g errgroup.Group
-	g.Go(func() (err error) { dataStore.CardData, err = db.CardData(); return })
-	g.Go(func() (err error) { dataStore.SuccessionRelations, err = db.SuccessionRelations(); return })
-	g.Go(func() (err error) { dataStore.SuccessionRelationMembers, err = db.SuccessionRelationMembers(); return })
-	g.Go(func() (err error) { dataStore.FactorNames, err = db.TextDataFactors(); return })
-	g.Go(func() (err error) { dataStore.VeteranCardId, err = db.TextDataVeteranCardId(); return })
-	g.Go(func() (err error) { dataStore.CharaNames, err = db.TextDataCharaName(); return })
-	g.Go(func() (err error) { dataStore.FactorType, err = db.SuccessionFactors(); return })
-	g.Go(func() (err error) { dataStore.TTRawScores, err = db.TeamStadiumRawScores(); return })
+	g.Go(func() (err error) { dataStore.cardData, err = db.CardData(); return })
+	g.Go(func() (err error) { dataStore.successionRelations, err = db.SuccessionRelations(); return })
+	g.Go(func() (err error) { dataStore.successionRelationMembers, err = db.SuccessionRelationMembers(); return })
+	g.Go(func() (err error) { dataStore.factorNames, err = db.TextDataFactors(); return })
+	g.Go(func() (err error) { dataStore.veteranCardId, err = db.TextDataVeteranCardId(); return })
+	g.Go(func() (err error) { dataStore.charaNames, err = db.TextDataCharaName(); return })
+	g.Go(func() (err error) { dataStore.factorType, err = db.SuccessionFactors(); return })
+	g.Go(func() (err error) { dataStore.ttRawScores, err = db.TeamStadiumRawScores(); return })
 	if err := g.Wait(); err != nil {
 		return &dataStore, fmt.Errorf("load db data: %w", err)
 	}
@@ -56,28 +56,28 @@ func Init() (*DataStore, error) {
 }
 
 // Maps factor ID to factor name
-func (dataStore *DataStore) MapFactorNames(ids []int) []string {
+func (dataStore *DataStore) FactorNames(ids []int) []string {
 	result := make([]string, 0, len(ids))
 	for _, id := range ids {
-		result = append(result, dataStore.FactorNames[id])
+		result = append(result, dataStore.factorNames[id])
 	}
 	return result
 }
 
 // Maps factor ID to factor type (r/g/b/race/white)
-func (dataStore *DataStore) MapFactorTypes(ids []int) []int {
+func (dataStore *DataStore) FactorClass(ids []int) []int {
 	result := make([]int, 0, len(ids))
 	for _, id := range ids {
-		result = append(result, dataStore.FactorType[id])
+		result = append(result, dataStore.factorType[id])
 	}
 	return result
 }
 
 // Maps score ID to raw score value
-func (dataStore *DataStore) MapTTRawScores(ids []int) []int {
+func (dataStore *DataStore) TTRawScores(ids []int) []int {
 	result := make([]int, 0, len(ids))
 	for _, id := range ids {
-		result = append(result, dataStore.TTRawScores[id])
+		result = append(result, dataStore.ttRawScores[id])
 	}
 	return result
 }
@@ -92,31 +92,51 @@ func (dataStore *DataStore) FactorLevels(ids []int) []int {
 }
 
 // Maps veteran card ID to chara title. Example: "[Title] Name"
-func (dataStore *DataStore) MapVeteranCardIdToCharaTitle(veteranCardIds []int) []string {
+func (dataStore *DataStore) VeteranCardCharaTitle(veteranCardIds []int) []string {
 	names := make([]string, 0, len(veteranCardIds))
 	for _, id := range veteranCardIds {
-		names = append(names, dataStore.VeteranCardId[id])
+		names = append(names, dataStore.veteranCardId[id])
 	}
 	return names
 }
 
 // Maps veteran card ID to chara id
-func (dataStore *DataStore) MapVeteranCardIdToCharaId(veteranCardIds []int) []int {
+func (dataStore *DataStore) VeteranCardChara(veteranCardIds []int) []int {
 	ids := make([]int, 0, len(veteranCardIds))
 	for _, id := range veteranCardIds {
-		charaId := dataStore.CardData[id]
+		charaId := dataStore.cardData[id]
 		ids = append(ids, charaId)
 	}
 	return ids
 }
 
 // Maps veteran card ID to chara name. Example: "Name"
-func (dataStore *DataStore) MapVeteranCardIdToCharaName(veteranCardIds []int) []string {
+func (dataStore *DataStore) VeteranCardCharaName(veteranCardIds []int) []string {
 	names := make([]string, 0, len(veteranCardIds))
 	for _, id := range veteranCardIds {
-		charaId := dataStore.CardData[id]
-		charaName := dataStore.CharaNames[charaId]
+		charaId := dataStore.cardData[id]
+		charaName := dataStore.charaNames[charaId]
 		names = append(names, charaName)
 	}
 	return names
+}
+
+// CardChara maps a card ID to its chara ID
+func (dataStore *DataStore) CardChara(cardId int) int {
+	return dataStore.cardData[cardId]
+}
+
+// CharaName maps a chara ID to its chara name
+func (dataStore *DataStore) CharaName(charaId int) string {
+	return dataStore.charaNames[charaId]
+}
+
+// RelationMembers maps a chara ID to its succession relation members
+func (dataStore *DataStore) RelationMembers(charaId int) []int {
+	return dataStore.successionRelationMembers[charaId]
+}
+
+// RelationPoint maps a succession relation type to its relation points
+func (dataStore *DataStore) RelationPoint(relationType int) int {
+	return dataStore.successionRelations[relationType]
 }
