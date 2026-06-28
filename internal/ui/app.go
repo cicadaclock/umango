@@ -67,7 +67,7 @@ func mainMenu(dataStore *data.DataStore, window fyne.Window) *fyne.Container {
 		container.NewTabItem("Veterans", pages.Veterans()),
 		container.NewTabItem("Optimizer", pages.Optimizer()),
 		container.NewTabItem("Veteran List", pages.VeteranList(dataStore, window)),
-		container.NewTabItem("TT Chart", pages.NewTeamTrialsPage()),
+		container.NewTabItem("TT Chart", pages.NewTeamTrialsPage(dataStore)),
 	)
 	tabs.SetTabLocation(container.TabLocationTop)
 	c := container.NewStack(tabs)

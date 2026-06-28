@@ -12,17 +12,18 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	"github.com/cicadaclock/umango/internal/data"
 	"github.com/cicadaclock/umango/internal/races"
 	"github.com/s-daehling/fyne-charts/pkg/coord"
 	gdata "github.com/s-daehling/fyne-charts/pkg/data"
 	"github.com/s-daehling/fyne-charts/pkg/style"
 )
 
-func NewTeamTrialsPage() *fyne.Container {
+func NewTeamTrialsPage(dataStore *data.DataStore) *fyne.Container {
 	// Get data, hardcoded path for now
 	home, _ := os.UserHomeDir()
 	resultSet, _ := races.LoadRacesFolder(filepath.Join(home, "Documents", "Saved races", "Team trials"))
-	tableData := races.NewTableData(resultSet)
+	tableData := races.NewTableData(dataStore, resultSet)
 
 	table := newVetTable(tableData)
 

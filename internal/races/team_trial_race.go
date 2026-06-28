@@ -16,6 +16,42 @@ func (ttrs *TeamTrialResultSet) append(ttr TeamTrialResult) {
 	ttrs.Set = append(ttrs.Set, ttr)
 }
 
+// Maps TrainedCharaIds to RaceHorseData
+func (ttrs TeamTrialResultSet) GetMyCharaData() map[int]RaceHorseData {
+	result := make(map[int]RaceHorseData, 50)
+	visited := make(map[int]bool, 50)
+	for _, ttr := range ttrs.Set {
+		for _, raceParams := range ttr.RaceStartParamsArray {
+			for _, uma := range raceParams.GetMyUmas() {
+				if !visited[uma.TrainedCharaId] {
+					result[uma.TrainedCharaId] = uma
+					visited[uma.TrainedCharaId] = true
+				}
+			}
+		}
+	}
+	return result
+}
+
+// Maps TrainedCharaIds to scores
+func (ttrs TeamTrialResultSet) GetMyScores() map[int]*ScoreArray {
+	scores := make(map[int]*ScoreArray)
+	for _, ttr := range ttrs.Set {
+		for _, charaResult := range ttr.GetMyCharaResults() {
+			if len(charaResult.ScoreEventArray) == 0 {
+				continue
+			}
+			scoreArray := scores[charaResult.TrainedCharaId]
+			if scoreArray == nil {
+				scoreArray = &ScoreArray{}
+				scores[charaResult.TrainedCharaId] = scoreArray
+			}
+			scoreArray.append(charaResult.TotalScore())
+		}
+	}
+	return scores
+}
+
 // Checks if RaceStartParamsArray and RaceResultArray rounds are matched
 //
 // Guarantees data processing can occur on both arrays using the same index
