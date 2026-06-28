@@ -52,6 +52,24 @@ func (ttrs TeamTrialResultSet) GetMyScores() map[int]*ScoreArray {
 	return scores
 }
 
+// Maps TrainedCharaIds to DistanceTypes
+//
+// Assumes the first found race with a given character is its decided distance
+func (ttrs TeamTrialResultSet) GetUmaDistanceTypes() map[int]DistanceType {
+	result := make(map[int]DistanceType)
+	for _, ttr := range ttrs.Set {
+		for i := range 5 {
+			umas := ttr.RaceStartParamsArray[i].GetMyUmas()
+			for _, uma := range umas {
+				if result[uma.TrainedCharaId] == 0 {
+					result[uma.TrainedCharaId] = ttr.RaceResultArray[i].DistanceType
+				}
+			}
+		}
+	}
+	return result
+}
+
 // Checks if RaceStartParamsArray and RaceResultArray rounds are matched
 //
 // Guarantees data processing can occur on both arrays using the same index

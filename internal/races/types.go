@@ -2,6 +2,12 @@ package races
 
 import "iter"
 
+// I couldn't find these types in the master.mdb, presumably because they are
+// calculated at runtime, so we define them here
+
+// DistanceType represents the TT race type, including surface
+//
+// i.e. Dirts are miles, but are shown as dirt, so that's a unique DistanceType
 type DistanceType int
 
 const (
@@ -58,7 +64,7 @@ func (dt DistanceType) String() string {
 	case Dirt:
 		return "Dirt"
 	}
-	return ""
+	return "n/a"
 }
 
 func (rs RunStyle) String() string {
