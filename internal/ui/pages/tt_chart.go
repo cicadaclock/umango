@@ -20,12 +20,22 @@ func NewTeamTrialsPage(dataStore *data.DataStore) *fyne.Container {
 	// Get data, hardcoded path for now
 	home, _ := os.UserHomeDir()
 	resultSet, _ := races.LoadRacesFolder(filepath.Join(home, "Documents", "Saved races", "Team trials"))
-	tableData := races.NewTableData(dataStore, resultSet)
 
-	table := newVetTable(tableData)
+	// TT veteran table
+	tableData := races.NewTableData(dataStore, resultSet)
+	cols := tableData.Columns()
+	table := newVetTable(tableData.Headers(), cols, tableData.ColumnWidths())
+	// Filter buttons for TT veteran table
+
+	// Individual score histogram
 	scores := resultSet.GetMyScores()
 	histogram := newScoreHistogram(*scores[2928])
-	rightSide := container.NewVSplit(histogram, container.NewWithoutLayout())
+
+	// Skill table
+	skillTable := container.NewWithoutLayout()
+
+	// Page containers
+	rightSide := container.NewVSplit(histogram, skillTable)
 	rightSide.SetOffset(0.4)
 	split := container.NewHSplit(table, rightSide)
 	split.SetOffset(0.7)
@@ -69,15 +79,10 @@ func newScoreHistogram(scoreArray races.ScoreArray) fyne.CanvasObject {
 }
 
 // newVetTable summarizes all sampled races
-func newVetTable(tableData races.TableData) *widget.Table {
-	headers := tableData.Headers()
-
-	// column-oriented for better data parsing
-	cols := tableData.Columns()
-
+func newVetTable(headers []string, cols [][]string, colWidths []int) *widget.Table {
 	table := widget.NewTable(
 		func() (int, int) {
-			return tableData.Len(), len(headers)
+			return len(cols[0]), len(headers)
 		},
 		func() fyne.CanvasObject {
 			return widget.NewLabel("")
@@ -106,12 +111,8 @@ func newVetTable(tableData races.TableData) *widget.Table {
 		}
 	}
 
-	for col, length := range tableData.ColumnWidths() {
+	for col, length := range colWidths {
 		table.SetColumnWidth(col, (float32(length)*7)+24)
-	}
-
-	table.OnSelected = func(id widget.TableCellID) {
-
 	}
 
 	return table

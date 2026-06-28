@@ -11,8 +11,8 @@ import "iter"
 type DistanceType int
 
 const (
-	_                   = iota
-	Sprint DistanceType = iota
+	NoneDistance DistanceType = iota
+	Sprint
 	Mile
 	Medium
 	Long
@@ -22,8 +22,8 @@ const (
 type RunStyle int
 
 const (
-	_              = iota
-	Front RunStyle = iota
+	NoneStyle RunStyle = iota
+	Front
 	Pace
 	Late
 	End
