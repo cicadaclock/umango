@@ -17,6 +17,21 @@ type TableData struct {
 	AvgScores       []int
 }
 
+// tableColumn represents TableData's header name and rendered data
+type tableColumn struct {
+	header string
+	value  func(td TableData) []string
+}
+
+// Source of truth for column order and content
+var tableColumns = []tableColumn{
+	{"ID", func(td TableData) []string { return itoaSlice(td.TrainedCharaIds) }},
+	{"Name", func(td TableData) []string { return td.Names }},
+	{"# Races", func(td TableData) []string { return itoaSlice(td.NumRaces) }},
+	{"Max", func(td TableData) []string { return itoaSlice(td.MaxScores) }},
+	{"Avg", func(td TableData) []string { return itoaSlice(td.AvgScores) }},
+}
+
 func NewTableData(dataStore TableMapper, ttrs TeamTrialResultSet) TableData {
 	scores := ttrs.GetMyScores()
 	umaData := ttrs.GetMyCharaData()
@@ -39,48 +54,56 @@ func NewTableData(dataStore TableMapper, ttrs TeamTrialResultSet) TableData {
 	return result
 }
 
+// Filter returns a new TableData containing only the rows at the given indices.
+func (td TableData) Filter(indices []int) TableData {
+	result := TableData{
+		TrainedCharaIds: filterSlice(td.TrainedCharaIds, indices),
+		Names:           filterSlice(td.Names, indices),
+		NumRaces:        filterSlice(td.NumRaces, indices),
+		MaxScores:       filterSlice(td.MaxScores, indices),
+		AvgScores:       filterSlice(td.AvgScores, indices),
+	}
+	return result
+}
+
 func (td TableData) Len() int {
 	return len(td.TrainedCharaIds)
 }
 
+// Header names for each column
 func (td TableData) Headers() []string {
-	headers := []string{
-		"ID",
-		"Name",
-		"# Races",
-		"Max",
-		"Avg",
+	headers := make([]string, len(tableColumns))
+	for i, col := range tableColumns {
+		headers[i] = col.header
 	}
 	return headers
 }
 
 // Columns returns the table contents in column-major order
 func (td TableData) Columns() [][]string {
-	cols := make([][]string, len(td.Headers()))
-	for i := range td.Headers() {
-		cols[i] = make([]string, 0, td.Len())
-	}
-	for i := range td.TrainedCharaIds {
-		cols[0] = append(cols[0], strconv.Itoa(td.TrainedCharaIds[i]))
-		cols[1] = append(cols[1], td.Names[i])
-		cols[2] = append(cols[2], strconv.Itoa(td.NumRaces[i]))
-		cols[3] = append(cols[3], strconv.Itoa(td.MaxScores[i]))
-		cols[4] = append(cols[4], strconv.Itoa(td.AvgScores[i]))
+	cols := make([][]string, len(tableColumns))
+	for i, col := range tableColumns {
+		cols[i] = col.value(td)
 	}
 	return cols
 }
 
-// Filter returns a new TableData containing only the rows at the given indices.
-func (td TableData) Filter(indices []int) TableData {
-	out := TableData{}
+// itoaSlice converts a slice of ints to a slice of strings
+func itoaSlice(a []int) []string {
+	result := make([]string, 0, len(a))
+	for _, i := range a {
+		result = append(result, strconv.Itoa(i))
+	}
+	return result
+}
+
+func filterSlice[T any](s []T, indices []int) []T {
+	result := make([]T, 0, len(indices))
 	for _, i := range indices {
-		if i < 0 || i >= td.Len() {
+		if i < 0 || i >= len(s) {
 			continue
 		}
-		out.TrainedCharaIds = append(out.TrainedCharaIds, td.TrainedCharaIds[i])
-		out.NumRaces = append(out.NumRaces, td.NumRaces[i])
-		out.MaxScores = append(out.MaxScores, td.MaxScores[i])
-		out.AvgScores = append(out.AvgScores, td.AvgScores[i])
+		result = append(result, s[i])
 	}
-	return out
+	return result
 }
