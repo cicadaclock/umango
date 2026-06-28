@@ -100,6 +100,21 @@ func (td TableData) Columns() [][]string {
 	return cols
 }
 
+// ColumnWidths returns the length of the longest string in a column
+// including headers
+func (td TableData) ColumnWidths() []int {
+	lengths := make([]int, len(tableColumns))
+	for i, col := range tableColumns {
+		lengths[i] = len(col.header)
+		for _, val := range col.value(td) {
+			if len(val) > lengths[i] {
+				lengths[i] = len(val)
+			}
+		}
+	}
+	return lengths
+}
+
 // itoaSlice converts a slice of ints to a slice of strings
 func itoaSlice(a []int) []string {
 	result := make([]string, 0, len(a))
