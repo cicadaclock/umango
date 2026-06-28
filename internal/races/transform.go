@@ -13,10 +13,15 @@ type TableData struct {
 	TrainedCharaIds []int
 	Names           []string
 	Distances       []string
+	DistanceTypes   []DistanceType
 	Styles          []string
+	StyleTypes      []RunStyle
 	NumRaces        []int
 	MaxScores       []int
 	AvgScores       []int
+
+	DistanceFilter DistanceType
+	StyleFilter    RunStyle
 }
 
 // tableColumn represents TableData's header name and rendered data
@@ -45,7 +50,9 @@ func NewTableData(dataStore TableMapper, ttrs TeamTrialResultSet) TableData {
 		TrainedCharaIds: make([]int, 0, len(scores)),
 		Names:           make([]string, 0, len(scores)),
 		Distances:       make([]string, 0, len(scores)),
+		DistanceTypes:   make([]DistanceType, 0, len(scores)),
 		Styles:          make([]string, 0, len(scores)),
+		StyleTypes:      make([]RunStyle, 0, len(scores)),
 		NumRaces:        make([]int, 0, len(scores)),
 		MaxScores:       make([]int, 0, len(scores)),
 		AvgScores:       make([]int, 0, len(scores)),
@@ -57,7 +64,9 @@ func NewTableData(dataStore TableMapper, ttrs TeamTrialResultSet) TableData {
 		result.TrainedCharaIds = append(result.TrainedCharaIds, trainedCharaId)
 		result.Names = append(result.Names, dataStore.VeteranCardCharaTitle([]int{uma.CardId})...)
 		result.Distances = append(result.Distances, distances[uma.TrainedCharaId].String())
+		result.DistanceTypes = append(result.DistanceTypes, distances[uma.TrainedCharaId])
 		result.Styles = append(result.Styles, uma.RunningStyle.String())
+		result.StyleTypes = append(result.StyleTypes, uma.RunningStyle)
 		result.NumRaces = append(result.NumRaces, scoreArray.Len())
 		result.MaxScores = append(result.MaxScores, scoreArray.Max())
 		result.AvgScores = append(result.AvgScores, scoreArray.Average())
@@ -71,6 +80,9 @@ func (td TableData) Filter(indices []int) TableData {
 		TrainedCharaIds: filterSlice(td.TrainedCharaIds, indices),
 		Names:           filterSlice(td.Names, indices),
 		Distances:       filterSlice(td.Distances, indices),
+		DistanceTypes:   filterSlice(td.DistanceTypes, indices),
+		Styles:          filterSlice(td.Styles, indices),
+		StyleTypes:      filterSlice(td.StyleTypes, indices),
 		NumRaces:        filterSlice(td.NumRaces, indices),
 		MaxScores:       filterSlice(td.MaxScores, indices),
 		AvgScores:       filterSlice(td.AvgScores, indices),
