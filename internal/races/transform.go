@@ -13,6 +13,7 @@ type TableData struct {
 	TrainedCharaIds []int
 	Names           []string
 	Distances       []string
+	Styles          []string
 	NumRaces        []int
 	MaxScores       []int
 	AvgScores       []int
@@ -29,6 +30,7 @@ var tableColumns = []tableColumn{
 	{"ID", func(td TableData) []string { return itoaSlice(td.TrainedCharaIds) }},
 	{"Name", func(td TableData) []string { return td.Names }},
 	{"Distance", func(td TableData) []string { return td.Distances }},
+	{"Style", func(td TableData) []string { return td.Styles }},
 	{"# Races", func(td TableData) []string { return itoaSlice(td.NumRaces) }},
 	{"Max", func(td TableData) []string { return itoaSlice(td.MaxScores) }},
 	{"Avg", func(td TableData) []string { return itoaSlice(td.AvgScores) }},
@@ -43,6 +45,7 @@ func NewTableData(dataStore TableMapper, ttrs TeamTrialResultSet) TableData {
 		TrainedCharaIds: make([]int, 0, len(scores)),
 		Names:           make([]string, 0, len(scores)),
 		Distances:       make([]string, 0, len(scores)),
+		Styles:          make([]string, 0, len(scores)),
 		NumRaces:        make([]int, 0, len(scores)),
 		MaxScores:       make([]int, 0, len(scores)),
 		AvgScores:       make([]int, 0, len(scores)),
@@ -54,6 +57,7 @@ func NewTableData(dataStore TableMapper, ttrs TeamTrialResultSet) TableData {
 		result.TrainedCharaIds = append(result.TrainedCharaIds, trainedCharaId)
 		result.Names = append(result.Names, dataStore.VeteranCardCharaName([]int{uma.CardId})...)
 		result.Distances = append(result.Distances, distances[uma.TrainedCharaId].String())
+		result.Styles = append(result.Styles, uma.RunningStyle.String())
 		result.NumRaces = append(result.NumRaces, scoreArray.Len())
 		result.MaxScores = append(result.MaxScores, scoreArray.Max())
 		result.AvgScores = append(result.AvgScores, scoreArray.Average())

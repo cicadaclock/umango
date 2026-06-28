@@ -29,24 +29,24 @@ type RaceHorseData struct {
 	FrameOrder int             `json:"frame_order"`
 	SkillArray []veteran.Skill `json:"skill_array"`
 	// Stats
-	Stamina      int `json:"stamina"`
-	Speed        int `json:"speed"`
-	Pow          int `json:"pow"`
-	Guts         int `json:"guts"`
-	Wiz          int `json:"wiz"`
-	RunningStyle int `json:"running_style"`
-	RaceDressId  int `json:"race_dress_id"`
-	FinalGrade   int `json:"final_grade"`
+	Stamina     int `json:"stamina"`
+	Speed       int `json:"speed"`
+	Pow         int `json:"pow"`
+	Guts        int `json:"guts"`
+	Wiz         int `json:"wiz"`
+	RaceDressId int `json:"race_dress_id"`
+	FinalGrade  int `json:"final_grade"`
 	// Distance aptitudes
 	ProperDistanceShort  int `json:"proper_distance_short"`
 	ProperDistanceMile   int `json:"proper_distance_mile"`
 	ProperDistanceMiddle int `json:"proper_distance_middle"`
 	ProperDistanceLong   int `json:"proper_distance_long"`
 	// Running style aptitudes
-	ProperRunningStyleNige   int `json:"proper_running_style_nige"`
-	ProperRunningStyleSenko  int `json:"proper_running_style_senko"`
-	ProperRunningStyleSashi  int `json:"proper_running_style_sashi"`
-	ProperRunningStyleOikomi int `json:"proper_running_style_oikomi"`
+	RunningStyle             RunStyle `json:"running_style"`
+	ProperRunningStyleNige   int      `json:"proper_running_style_nige"`
+	ProperRunningStyleSenko  int      `json:"proper_running_style_senko"`
+	ProperRunningStyleSashi  int      `json:"proper_running_style_sashi"`
+	ProperRunningStyleOikomi int      `json:"proper_running_style_oikomi"`
 	// Ground aptitudes
 	ProperGroundTurf int `json:"proper_ground_turf"`
 	ProperGroundDirt int `json:"proper_ground_dirt"`
