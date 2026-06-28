@@ -60,8 +60,8 @@ func newVetTable(tableData races.TableData) *widget.Table {
 		}
 	}
 
-	for col, header := range headers {
-		table.SetColumnWidth(col, float32(len(header))*9+24)
+	for col, length := range tableData.ColumnWidths() {
+		table.SetColumnWidth(col, float32(length)*9+24)
 	}
 
 	return table
