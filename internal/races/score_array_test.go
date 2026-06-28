@@ -56,6 +56,16 @@ func TestScoreArrayMax(t *testing.T) {
 	}
 }
 
+func TestScoreArrayMin(t *testing.T) {
+	s := ScoreArray{}
+	s.append(10)
+	s.append(20)
+	s.append(30)
+	if s.Min() != 10 {
+		t.Errorf("s.Min() == %d, want 10", s.Min())
+	}
+}
+
 func TestScoreArrayFilter(t *testing.T) {
 	s := ScoreArray{}
 	s.append(10)
