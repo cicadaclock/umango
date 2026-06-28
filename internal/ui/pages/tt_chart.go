@@ -61,7 +61,7 @@ func newVetTable(tableData races.TableData) *widget.Table {
 	}
 
 	for col, length := range tableData.ColumnWidths() {
-		table.SetColumnWidth(col, float32(length)*9+24)
+		table.SetColumnWidth(col, (float32(length)*7)+24)
 	}
 
 	return table
