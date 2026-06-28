@@ -1,14 +1,19 @@
 package pages
 
 import (
+	"log"
 	"os"
 	"path/filepath"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/cicadaclock/umango/internal/data"
 	"github.com/cicadaclock/umango/internal/races"
+	"github.com/s-daehling/fyne-charts/pkg/coord"
+	gdata "github.com/s-daehling/fyne-charts/pkg/data"
+	"github.com/s-daehling/fyne-charts/pkg/style"
 )
 
 func NewTeamTrialsPage(dataStore *data.DataStore) *fyne.Container {
@@ -18,8 +23,49 @@ func NewTeamTrialsPage(dataStore *data.DataStore) *fyne.Container {
 	tableData := races.NewTableData(dataStore, resultSet)
 
 	table := newVetTable(tableData)
+	scores := resultSet.GetMyScores()
+	histogram := newScoreHistogram(*scores[2928])
+	rightSide := container.NewVSplit(histogram, container.NewWithoutLayout())
+	rightSide.SetOffset(0.4)
+	split := container.NewHSplit(table, rightSide)
+	split.SetOffset(0.7)
+	return container.NewStack(split)
+}
 
-	return container.NewStack(table)
+func newScoreHistogram(scoreArray races.ScoreArray) fyne.CanvasObject {
+	// Labels
+	chart := coord.NewCartesianNumericalChart("Score vs. Frequency")
+	chart.SetXAxisLabel("Score")
+	chart.SetYAxisLabel("Frequency")
+
+	// Color
+	pal := style.NewPaletteTriadic(theme.ColorNamePrimary)
+	pal = style.NewPaletteLightDarkSet(pal.Names())
+
+	// Data
+	finalScoreNps := make([]*coord.NumericalPointSeries, 1)
+	finalScoreData := []gdata.NumericalPoint{}
+	steps := 10
+	xPts, yPts := scoreArray.Density(steps)
+	for i := range xPts {
+		point := gdata.NumericalPoint{
+			N:   float64(xPts[i]),
+			Val: float64(yPts[i]),
+		}
+		finalScoreData = append(finalScoreData, point)
+	}
+
+	// Populate data
+	nps, err := coord.NewNumericalPointSeries("data", pal.Next(), finalScoreData)
+	if err != nil {
+		log.Fatalf("error creating nps: %v", err)
+	}
+	finalScoreNps = append(finalScoreNps, nps)
+	for _, nps := range finalScoreNps {
+		_ = chart.AddBarSeries(nps, float64(scoreArray.StepSize(steps)))
+	}
+
+	return chart
 }
 
 // newVetTable summarizes all sampled races
@@ -62,6 +108,10 @@ func newVetTable(tableData races.TableData) *widget.Table {
 
 	for col, length := range tableData.ColumnWidths() {
 		table.SetColumnWidth(col, (float32(length)*7)+24)
+	}
+
+	table.OnSelected = func(id widget.TableCellID) {
+
 	}
 
 	return table
