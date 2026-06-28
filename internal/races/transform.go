@@ -6,7 +6,7 @@ import (
 
 type TableMapper interface {
 	// Maps veteran card ID to chara name
-	VeteranCardCharaName(ids []int) []string
+	VeteranCardCharaTitle(ids []int) []string
 }
 
 type TableData struct {
@@ -55,7 +55,7 @@ func NewTableData(dataStore TableMapper, ttrs TeamTrialResultSet) TableData {
 		uma := umaData[trainedCharaId]
 
 		result.TrainedCharaIds = append(result.TrainedCharaIds, trainedCharaId)
-		result.Names = append(result.Names, dataStore.VeteranCardCharaName([]int{uma.CardId})...)
+		result.Names = append(result.Names, dataStore.VeteranCardCharaTitle([]int{uma.CardId})...)
 		result.Distances = append(result.Distances, distances[uma.TrainedCharaId].String())
 		result.Styles = append(result.Styles, uma.RunningStyle.String())
 		result.NumRaces = append(result.NumRaces, scoreArray.Len())
