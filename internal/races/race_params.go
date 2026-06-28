@@ -18,7 +18,6 @@ type RaceStartParams struct {
 // Similar to veteran but some fields have different names and some are
 // irrelevant to veterans so a new struct is used
 type RaceHorseData struct {
-	Distance    DistanceType
 	TrainerName string `json:"trainer_name"`
 	TeamId      int    `json:"team_id"`
 	// Unique chara ID

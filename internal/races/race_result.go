@@ -2,7 +2,7 @@ package races
 
 // Result of a single team trial round
 type RaceResult struct {
-	DistanceType int `json:"distance_type"`
+	DistanceType DistanceType `json:"distance_type"`
 	// Base64-encoded compressed race scenario blob
 	RaceScenario   string `json:"race_scenario"`
 	Round          int    `json:"round"`
