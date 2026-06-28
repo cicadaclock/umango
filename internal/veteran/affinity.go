@@ -4,8 +4,8 @@ import (
 	"fmt"
 )
 
-// AffinityData provides the functions this package needs from DataStore
-type AffinityData interface {
+// AffinityMapper provides the functions this package needs from DataStore
+type AffinityMapper interface {
 	// CardChara maps a card ID to its chara ID
 	CardChara(cardId int) int
 	// CharaName maps a chara ID to its chara name
@@ -39,7 +39,7 @@ type Legacy struct {
 	Parent2        Parent
 }
 
-func NewLegacy(traineeCharaId int, parent1, parent2 Veteran, dataStore AffinityData) Legacy {
+func NewLegacy(traineeCharaId int, parent1, parent2 Veteran, dataStore AffinityMapper) Legacy {
 	return Legacy{
 		TraineeCharaId: traineeCharaId,
 		Parent1:        NewParent(parent1, dataStore),
@@ -47,7 +47,7 @@ func NewLegacy(traineeCharaId int, parent1, parent2 Veteran, dataStore AffinityD
 	}
 }
 
-func NewParent(v Veteran, dataStore AffinityData) Parent {
+func NewParent(v Veteran, dataStore AffinityMapper) Parent {
 	parent := Parent{Member: newMember(v.CardId, v.WinSaddleIdArray, dataStore)}
 	for _, chara := range v.SuccessionCharaArray {
 		switch chara.PositionId {
@@ -60,14 +60,14 @@ func NewParent(v Veteran, dataStore AffinityData) Parent {
 	return parent
 }
 
-func newMember(cardId int, winSaddleIds []int, dataStore AffinityData) Member {
+func newMember(cardId int, winSaddleIds []int, dataStore AffinityMapper) Member {
 	return Member{
 		CharaId:      dataStore.CardChara(cardId),
 		WinSaddleIds: winSaddleIds,
 	}
 }
 
-func (legacy Legacy) Print(dataStore AffinityData) {
+func (legacy Legacy) Print(dataStore AffinityMapper) {
 	fmt.Println(dataStore.CharaName(legacy.TraineeCharaId))
 	fmt.Println("├──", dataStore.CharaName(legacy.Parent1.CharaId))
 	fmt.Println("│   ├──", dataStore.CharaName(legacy.Parent1.GrandParent1.CharaId))
@@ -78,18 +78,18 @@ func (legacy Legacy) Print(dataStore AffinityData) {
 }
 
 // Total affinity score: base affinity + race affinity
-func (legacy Legacy) Affinity(dataStore AffinityData) int {
+func (legacy Legacy) Affinity(dataStore AffinityMapper) int {
 	return legacy.BaseAffinity(dataStore) + legacy.RaceAffinity()
 }
 
 // Affinity from base umas
-func (legacy Legacy) BaseAffinity(dataStore AffinityData) int {
+func (legacy Legacy) BaseAffinity(dataStore AffinityMapper) int {
 	return legacy.Parent1.baseAffinity(dataStore, legacy.TraineeCharaId) +
 		legacy.Parent2.baseAffinity(dataStore, legacy.TraineeCharaId) +
 		relationAffinity(dataStore, legacy.Parent1.CharaId, legacy.Parent2.CharaId)
 }
 
-func (parent Parent) baseAffinity(dataStore AffinityData, traineeCharaId int) int {
+func (parent Parent) baseAffinity(dataStore AffinityMapper, traineeCharaId int) int {
 	return relationAffinity(dataStore, traineeCharaId, parent.CharaId) +
 		relationAffinity(dataStore, traineeCharaId, parent.CharaId, parent.GrandParent1.CharaId) +
 		relationAffinity(dataStore, traineeCharaId, parent.CharaId, parent.GrandParent2.CharaId)
@@ -106,7 +106,7 @@ func (parent Parent) raceAffinity() int {
 
 // Sums the affinity of every succession relation shared by all of the given
 // charas
-func relationAffinity(dataStore AffinityData, charaIds ...int) int {
+func relationAffinity(dataStore AffinityMapper, charaIds ...int) int {
 	relationIdsPerChara := make([][]int, len(charaIds))
 	for i, charaId := range charaIds {
 		for _, prev := range charaIds[:i] {
@@ -119,7 +119,7 @@ func relationAffinity(dataStore AffinityData, charaIds ...int) int {
 	return sumRelationAffinity(dataStore, matchRelationIds(relationIdsPerChara...))
 }
 
-func sumRelationAffinity(dataStore AffinityData, relationIds []int) int {
+func sumRelationAffinity(dataStore AffinityMapper, relationIds []int) int {
 	var sum int = 0
 	for _, relationId := range relationIds {
 		sum += dataStore.RelationPoint(relationId)

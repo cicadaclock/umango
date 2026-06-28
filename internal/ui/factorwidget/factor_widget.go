@@ -11,8 +11,8 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-// FactorData provides the functions this widget needs from DataStore
-type FactorData interface {
+// FactorMapper provides the functions this widget needs from DataStore
+type FactorMapper interface {
 	// Maps factor ID to factor name
 	FactorNames(ids []int) []string
 	// Maps factor ID to factor type
@@ -46,7 +46,7 @@ type FactorWidget struct {
 
 	// Internal data
 
-	mapper         FactorData      // mapper provides factor data lookups
+	mapper         FactorMapper    // mapper provides factor data lookups
 	factorSuffixes []string        // factorSuffixes is the array of stars (or other suffixes) appended to each factor
 	redFactors     *fyne.Container // redFactors is the view of all red factors
 	greenFactors   *fyne.Container // greenFactors is the view of all green factors
@@ -57,7 +57,7 @@ type FactorWidget struct {
 }
 
 func NewFactorWidget(
-	mapper FactorData,
+	mapper FactorMapper,
 	veteranId int,
 	factors, factorsP1, factorsP2 []int,
 ) *FactorWidget {
@@ -73,7 +73,7 @@ func NewFactorWidget(
 
 // NewFactorWidgetWithStyle creates a new label widget with the set text content
 func NewFactorWidgetWithStyle(
-	mapper FactorData,
+	mapper FactorMapper,
 	veteranId int,
 	factors, factorsP1, factorsP2 []int,
 	suffixType SuffixType,

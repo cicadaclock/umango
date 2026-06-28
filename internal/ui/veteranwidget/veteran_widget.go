@@ -19,14 +19,14 @@ const (
 type VeteranWidget struct {
 	widget.BaseWidget
 	VeteranSlice    *veteran.VeteranSlice
-	mapper          factorwidget.FactorData
+	mapper          factorwidget.FactorMapper
 	veteranFilePath string
 	widgets         []*factorwidget.FactorWidget
 	list            *widget.List
 }
 
 func NewVeteranWidget(
-	mapper factorwidget.FactorData,
+	mapper factorwidget.FactorMapper,
 ) *VeteranWidget {
 	v := &VeteranWidget{
 		VeteranSlice: &veteran.VeteranSlice{},
