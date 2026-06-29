@@ -48,7 +48,8 @@ func (s ScoreArray) Filter(indices []int) ScoreArray {
 	return filtered
 }
 
-func (s ScoreArray) Density(steps int) ([]int, []int) {
+// HistogramCoords returns a pair of ([]x, []y) as integers
+func (s ScoreArray) HistogramCoords(steps int) ([]int, []int) {
 	xPts := make([]int, steps)
 	yPts := make([]int, steps)
 	stepSize := s.StepSize(steps)
@@ -60,6 +61,7 @@ func (s ScoreArray) Density(steps int) ([]int, []int) {
 	return xPts, yPts
 }
 
+// Frequency calculates the number of scores that fall within the provided range
 func (s ScoreArray) Frequency(x, stepSize int) int {
 	n := 0
 	for _, i := range s.Score {
@@ -70,6 +72,7 @@ func (s ScoreArray) Frequency(x, stepSize int) int {
 	return n
 }
 
+// StepSize calculates the size of a given step across the entire range of data
 func (s ScoreArray) StepSize(steps int) int {
 	return (s.Max() - s.Min()) / steps
 }

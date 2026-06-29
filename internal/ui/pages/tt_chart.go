@@ -21,18 +21,29 @@ func NewTeamTrialsPage(dataStore *data.DataStore) *fyne.Container {
 	home, _ := os.UserHomeDir()
 	resultSet, _ := races.LoadRacesFolder(filepath.Join(home, "Documents", "Saved races", "Team trials"))
 
+	// Individual score histogram
+	scores := resultSet.GetMyScores()
+	maxScore := 0
+	for _, scoreArray := range scores {
+		max := scoreArray.Max()
+		if maxScore < max {
+			maxScore = max
+		}
+	}
+	scoreArray := *scores[2928]
+	histogram := newScoreHistogram(scoreArray, maxScore)
+
+	// Skill table
+	skillTable := container.NewWithoutLayout()
+
 	// TT veteran table
 	tableData := races.NewTableData(dataStore, resultSet)
 	cols := tableData.Columns()
 	table := newVetTable(tableData.Headers(), cols, tableData.ColumnWidths())
+	table.OnSelected = func(id widget.TableCellID) {
+		tableData.GetTrainedCharaId(id.Row)
+	}
 	// Filter buttons for TT veteran table
-
-	// Individual score histogram
-	scores := resultSet.GetMyScores()
-	histogram := newScoreHistogram(*scores[2928])
-
-	// Skill table
-	skillTable := container.NewWithoutLayout()
 
 	// Page containers
 	rightSide := container.NewVSplit(histogram, skillTable)
@@ -42,21 +53,33 @@ func NewTeamTrialsPage(dataStore *data.DataStore) *fyne.Container {
 	return container.NewStack(split)
 }
 
-func newScoreHistogram(scoreArray races.ScoreArray) fyne.CanvasObject {
+func newScoreHistogram(scoreArray races.ScoreArray, maxScore int) *coord.CartesianNumericalChart {
 	// Labels
 	chart := coord.NewCartesianNumericalChart("Score vs. Frequency")
 	chart.SetXAxisLabel("Score")
 	chart.SetYAxisLabel("Frequency")
+	chart.HideLegend()
+	_ = chart.SetOrigin(0.0, 0.0)
+	_ = chart.SetXRange(0.0, float64(maxScore+10000))
 
 	// Color
 	pal := style.NewPaletteTriadic(theme.ColorNamePrimary)
 	pal = style.NewPaletteLightDarkSet(pal.Names())
 
 	// Data
-	finalScoreNps := make([]*coord.NumericalPointSeries, 1)
-	finalScoreData := []gdata.NumericalPoint{}
 	steps := 10
-	xPts, yPts := scoreArray.Density(steps)
+	nps, err := calculateScoreData(scoreArray, steps)
+	if err != nil {
+		log.Fatalf("error creating nps: %v", err)
+	}
+	_ = chart.AddBarSeries(nps, float64(scoreArray.StepSize(steps)))
+
+	return chart
+}
+
+func calculateScoreData(scoreArray races.ScoreArray, steps int) (*coord.NumericalPointSeries, error) {
+	finalScoreData := []gdata.NumericalPoint{}
+	xPts, yPts := scoreArray.HistogramCoords(steps)
 	for i := range xPts {
 		point := gdata.NumericalPoint{
 			N:   float64(xPts[i]),
@@ -64,18 +87,7 @@ func newScoreHistogram(scoreArray races.ScoreArray) fyne.CanvasObject {
 		}
 		finalScoreData = append(finalScoreData, point)
 	}
-
-	// Populate data
-	nps, err := coord.NewNumericalPointSeries("data", pal.Next(), finalScoreData)
-	if err != nil {
-		log.Fatalf("error creating nps: %v", err)
-	}
-	finalScoreNps = append(finalScoreNps, nps)
-	for _, nps := range finalScoreNps {
-		_ = chart.AddBarSeries(nps, float64(scoreArray.StepSize(steps)))
-	}
-
-	return chart
+	return coord.NewNumericalPointSeries("data", theme.ColorNamePrimary, finalScoreData)
 }
 
 // newVetTable summarizes all sampled races
