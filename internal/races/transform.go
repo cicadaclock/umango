@@ -127,6 +127,11 @@ func (td TableData) ColumnWidths() []int {
 	return lengths
 }
 
+// GetTrainedCharaId returns a single TrainedCharaId from a given row
+func (td TableData) GetTrainedCharaId(row int) int {
+	return td.TrainedCharaIds[row]
+}
+
 // itoaSlice converts a slice of ints to a slice of strings
 func itoaSlice(a []int) []string {
 	result := make([]string, 0, len(a))
