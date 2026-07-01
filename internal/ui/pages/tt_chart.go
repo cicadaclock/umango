@@ -1,7 +1,6 @@
 package pages
 
 import (
-	"log"
 	"os"
 	"path/filepath"
 
@@ -13,7 +12,6 @@ import (
 	"github.com/cicadaclock/umango/internal/races"
 	"github.com/s-daehling/fyne-charts/pkg/coord"
 	gdata "github.com/s-daehling/fyne-charts/pkg/data"
-	"github.com/s-daehling/fyne-charts/pkg/style"
 )
 
 func NewTeamTrialsPage(dataStore *data.DataStore) *fyne.Container {
@@ -21,17 +19,20 @@ func NewTeamTrialsPage(dataStore *data.DataStore) *fyne.Container {
 	home, _ := os.UserHomeDir()
 	resultSet, _ := races.LoadRacesFolder(filepath.Join(home, "Documents", "Saved races", "Team trials"))
 
-	// Individual score histogram
+	// Individual score histograms
+	steps := 10
 	scores := resultSet.GetMyScores()
 	maxScore := 0
-	for _, scoreArray := range scores {
+	umaScoreData := make(map[int]*coord.NumericalPointSeries, len(scores))
+	for trainedCharaId, scoreArray := range scores {
+		umaScoreData[trainedCharaId] = calculateScoreData(*scoreArray, steps)
+		// Max score for histogram range
 		max := scoreArray.Max()
 		if maxScore < max {
 			maxScore = max
 		}
 	}
-	scoreArray := *scores[2928]
-	histogram := newScoreHistogram(scoreArray, maxScore)
+	chart := newScoreHistogram(maxScore)
 
 	// Skill table
 	skillTable := container.NewWithoutLayout()
@@ -41,19 +42,24 @@ func NewTeamTrialsPage(dataStore *data.DataStore) *fyne.Container {
 	cols := tableData.Columns()
 	table := newVetTable(tableData.Headers(), cols, tableData.ColumnWidths())
 	table.OnSelected = func(id widget.TableCellID) {
-		tableData.GetTrainedCharaId(id.Row)
+		swapHistogram(chart, umaScoreData[tableData.GetTrainedCharaId(id.Row)], 2000)
 	}
 	// Filter buttons for TT veteran table
 
 	// Page containers
-	rightSide := container.NewVSplit(histogram, skillTable)
+	rightSide := container.NewVSplit(chart, skillTable)
 	rightSide.SetOffset(0.4)
 	split := container.NewHSplit(table, rightSide)
 	split.SetOffset(0.7)
 	return container.NewStack(split)
 }
 
-func newScoreHistogram(scoreArray races.ScoreArray, maxScore int) *coord.CartesianNumericalChart {
+func swapHistogram(chart *coord.CartesianNumericalChart, nps *coord.NumericalPointSeries, barWidth float64) {
+	chart.RemoveSeries("data")
+	chart.AddBarSeries(nps, barWidth)
+}
+
+func newScoreHistogram(maxScore int) *coord.CartesianNumericalChart {
 	// Labels
 	chart := coord.NewCartesianNumericalChart("Score vs. Frequency")
 	chart.SetXAxisLabel("Score")
@@ -61,23 +67,10 @@ func newScoreHistogram(scoreArray races.ScoreArray, maxScore int) *coord.Cartesi
 	chart.HideLegend()
 	_ = chart.SetOrigin(0.0, 0.0)
 	_ = chart.SetXRange(0.0, float64(maxScore+10000))
-
-	// Color
-	pal := style.NewPaletteTriadic(theme.ColorNamePrimary)
-	pal = style.NewPaletteLightDarkSet(pal.Names())
-
-	// Data
-	steps := 10
-	nps, err := calculateScoreData(scoreArray, steps)
-	if err != nil {
-		log.Fatalf("error creating nps: %v", err)
-	}
-	_ = chart.AddBarSeries(nps, float64(scoreArray.StepSize(steps)))
-
 	return chart
 }
 
-func calculateScoreData(scoreArray races.ScoreArray, steps int) (*coord.NumericalPointSeries, error) {
+func calculateScoreData(scoreArray races.ScoreArray, steps int) *coord.NumericalPointSeries {
 	finalScoreData := []gdata.NumericalPoint{}
 	xPts, yPts := scoreArray.HistogramCoords(steps)
 	for i := range xPts {
@@ -87,7 +80,9 @@ func calculateScoreData(scoreArray races.ScoreArray, steps int) (*coord.Numerica
 		}
 		finalScoreData = append(finalScoreData, point)
 	}
-	return coord.NewNumericalPointSeries("data", theme.ColorNamePrimary, finalScoreData)
+	// Not polar data so it will never error
+	nps, _ := coord.NewNumericalPointSeries("data", theme.ColorNamePrimary, finalScoreData)
+	return nps
 }
 
 // newVetTable summarizes all sampled races
