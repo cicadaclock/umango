@@ -10,6 +10,10 @@ import (
 
 func LoadRacesFolder(directoryPath string) (TeamTrialResultSet, error) {
 	resultSet := TeamTrialResultSet{}
+	_, err := os.ReadDir(directoryPath)
+	if err != nil {
+		return resultSet, err
+	}
 	filepath.WalkDir(directoryPath, func(path string, d fs.DirEntry, err error) error {
 		if d.IsDir() {
 			return nil

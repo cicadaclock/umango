@@ -16,8 +16,14 @@ import (
 
 func NewTeamTrialsPage(dataStore *data.DataStore) *fyne.Container {
 	// Get data, hardcoded path for now
-	home, _ := os.UserHomeDir()
-	resultSet, _ := races.LoadRacesFolder(filepath.Join(home, "Documents", "Saved races", "Team trials"))
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return container.NewWithoutLayout()
+	}
+	resultSet, err := races.LoadRacesFolder(filepath.Join(home, "Documents", "Saved races", "Team trials"))
+	if err != nil {
+		return container.NewWithoutLayout()
+	}
 
 	// Individual score histograms
 	steps := 10
