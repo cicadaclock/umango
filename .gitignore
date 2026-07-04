@@ -6,3 +6,7 @@
 temp/
 *.code-workspace
 *_debug_bin*
+
+# Builds
+umango.exe
+umango
