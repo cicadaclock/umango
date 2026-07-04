@@ -38,10 +38,15 @@ func VeteranList(dataStore *data.DataStore, window fyne.Window) *fyne.Container 
 	if err != nil {
 		log.Fatalf("get home dir: %v", err)
 	}
-	dir := storage.NewFileURI(filepath.Join(homeDir, "Documents", "Saved races"))
-	listDir, err := storage.ListerForURI(dir)
-	if err != nil {
-		log.Fatalf("lister home dir uri: %v", err)
+
+	tryPaths := []string{filepath.Join(homeDir, "Documents", "Saved races"), homeDir}
+	var listDir fyne.ListableURI
+	for _, path := range tryPaths {
+		dir := storage.NewFileURI(path)
+		listDir, err = storage.ListerForURI(dir)
+		if err != nil {
+			continue
+		}
 	}
 	veteranFileDialog.SetLocation(listDir)
 	veteranFileDialog.Resize(fyne.NewSize(500, 500))
