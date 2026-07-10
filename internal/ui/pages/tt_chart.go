@@ -1,8 +1,10 @@
 package pages
 
 import (
+	"math"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -33,17 +35,16 @@ func NewTeamTrialsPage(dataStore *data.DataStore) *fyne.Container {
 
 	// Individual score histograms
 	scores := resultSet.GetMyScores()
-	maxScore := 0
+	maxScore, maxFreq := 0, 0
 	umaScoreData := make(map[int]*coord.NumericalPointSeries, len(scores))
 	for trainedCharaId, scoreArray := range scores {
-		umaScoreData[trainedCharaId] = calculateScoreData(*scoreArray, BAR_WIDTH)
+		nps, freq := calculateScoreData(*scoreArray, BAR_WIDTH)
+		umaScoreData[trainedCharaId] = nps
 		// Max score for histogram range
-		max := scoreArray.Max()
-		if maxScore < max {
-			maxScore = max
-		}
+		maxScore = int(math.Max(float64(maxScore), float64(scoreArray.Max())))
+		maxFreq = int(math.Max(float64(maxFreq), float64(freq)))
 	}
-	chart := newScoreHistogram(maxScore)
+	chart := newScoreHistogram(maxScore, maxFreq)
 
 	// Skill table
 	skillTable := container.NewWithoutLayout()
@@ -59,7 +60,7 @@ func NewTeamTrialsPage(dataStore *data.DataStore) *fyne.Container {
 
 	// Page containers
 	rightSide := container.NewVSplit(chart, skillTable)
-	rightSide.SetOffset(0.4)
+	rightSide.SetOffset(0.45)
 	split := container.NewHSplit(table, rightSide)
 	split.SetOffset(0.7)
 	return container.NewStack(split)
@@ -71,7 +72,7 @@ func swapHistogram(chart *coord.CartesianNumericalChart, nps *coord.NumericalPoi
 	chart.AddBarSeries(nps, barWidth)
 }
 
-func newScoreHistogram(maxScore int) *coord.CartesianNumericalChart {
+func newScoreHistogram(maxScore, maxFreq int) *coord.CartesianNumericalChart {
 	// Labels
 	chart := coord.NewCartesianNumericalChart("Score vs. Frequency")
 	chart.SetXAxisLabel("Score")
@@ -79,11 +80,13 @@ func newScoreHistogram(maxScore int) *coord.CartesianNumericalChart {
 	chart.HideLegend()
 	_ = chart.SetOrigin(0.0, 0.0)
 	_ = chart.SetXRange(0.0, float64(maxScore+10000))
+	_ = chart.SetYRange(0.0, float64(maxFreq)+1)
 	return chart
 }
 
-// calculateScoreData transforms ScoreArray Scores into histogram coordinates
-func calculateScoreData(scoreArray races.ScoreArray, stepSize int) *coord.NumericalPointSeries {
+// calculateScoreData transforms ScoreArray Scores into histogram coordinates,
+// returning the series and the tallest bucket's frequency
+func calculateScoreData(scoreArray races.ScoreArray, stepSize int) (*coord.NumericalPointSeries, int) {
 	finalScoreData := []gdata.NumericalPoint{}
 	xPts, yPts := scoreArray.HistogramCoords(stepSize)
 	for i := range xPts {
@@ -93,9 +96,9 @@ func calculateScoreData(scoreArray races.ScoreArray, stepSize int) *coord.Numeri
 		}
 		finalScoreData = append(finalScoreData, point)
 	}
-	// Not polar data so it will never error
+	// Not polar data so this will never error
 	nps, _ := coord.NewNumericalPointSeries("data", theme.ColorNamePrimary, finalScoreData)
-	return nps
+	return nps, slices.Max(yPts)
 }
 
 // newVetTable summarizes all sampled races
