@@ -17,6 +17,7 @@ import (
 const (
 	// Size modifier for histogram to prevent flickering between bars when resizing
 	BAR_WIDTH_MODIFIER = 1.05
+	BAR_WIDTH          = 5000
 )
 
 func NewTeamTrialsPage(dataStore *data.DataStore) *fyne.Container {
@@ -31,12 +32,11 @@ func NewTeamTrialsPage(dataStore *data.DataStore) *fyne.Container {
 	}
 
 	// Individual score histograms
-	stepSize := 5000
 	scores := resultSet.GetMyScores()
 	maxScore := 0
 	umaScoreData := make(map[int]*coord.NumericalPointSeries, len(scores))
 	for trainedCharaId, scoreArray := range scores {
-		umaScoreData[trainedCharaId] = calculateScoreData(*scoreArray, stepSize)
+		umaScoreData[trainedCharaId] = calculateScoreData(*scoreArray, BAR_WIDTH)
 		// Max score for histogram range
 		max := scoreArray.Max()
 		if maxScore < max {
@@ -53,7 +53,7 @@ func NewTeamTrialsPage(dataStore *data.DataStore) *fyne.Container {
 	cols := tableData.Columns()
 	table := newVetTable(tableData.Headers(), cols, tableData.ColumnWidths())
 	table.OnSelected = func(id widget.TableCellID) {
-		swapHistogram(chart, umaScoreData[tableData.GetTrainedCharaId(id.Row)], float64(stepSize)*BAR_WIDTH_MODIFIER)
+		swapHistogram(chart, umaScoreData[tableData.GetTrainedCharaId(id.Row)], float64(BAR_WIDTH)*BAR_WIDTH_MODIFIER)
 	}
 	// Filter buttons for TT veteran table
 
