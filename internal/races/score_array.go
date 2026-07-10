@@ -1,6 +1,7 @@
 package races
 
 import (
+	"math"
 	"slices"
 )
 
@@ -48,31 +49,22 @@ func (s ScoreArray) Filter(indices []int) ScoreArray {
 	return filtered
 }
 
-// HistogramCoords returns a pair of ([]x, []y) as integers
-func (s ScoreArray) HistogramCoords(steps int) ([]int, []int) {
-	xPts := make([]int, steps)
-	yPts := make([]int, steps)
-	stepSize := s.StepSize(steps)
-	for i := range steps {
-		x := int(s.Min()) + (int(i) * stepSize)
-		xPts[i] = x
-		yPts[i] = s.Frequency(x, stepSize)
+// HistogramCoords returns a pair of ([]x, []y) allocated into buckets
+func (s ScoreArray) HistogramCoords(stepSize int) ([]int, []int) {
+	bMax := getScoreBucketIndex(s.Max(), stepSize)
+	bMin := getScoreBucketIndex(s.Min(), stepSize)
+	numBuckets := (bMax - bMin) + 1
+	xPts := make([]int, numBuckets)
+	yPts := make([]int, numBuckets)
+
+	for _, score := range s.Score {
+		i := getScoreBucketIndex(score, stepSize) - bMin
+		xPts[i] = stepSize * (bMin + i)
+		yPts[i]++
 	}
 	return xPts, yPts
 }
 
-// Frequency calculates the number of scores that fall within the provided range
-func (s ScoreArray) Frequency(x, stepSize int) int {
-	n := 0
-	for _, i := range s.Score {
-		if i >= x && i < x+stepSize {
-			n++
-		}
-	}
-	return n
-}
-
-// StepSize calculates the size of a given step across the entire range of data
-func (s ScoreArray) StepSize(steps int) int {
-	return (s.Max() - s.Min()) / steps
+func getScoreBucketIndex(score, stepSize int) int {
+	return int(math.Ceil(float64(score) / float64(stepSize)))
 }

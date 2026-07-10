@@ -14,6 +14,11 @@ import (
 	gdata "github.com/s-daehling/fyne-charts/pkg/data"
 )
 
+const (
+	// Size modifier for histogram to prevent flickering between bars when resizing
+	BAR_WIDTH_MODIFIER = 1.05
+)
+
 func NewTeamTrialsPage(dataStore *data.DataStore) *fyne.Container {
 	// Get data, hardcoded path for now
 	home, err := os.UserHomeDir()
@@ -26,12 +31,12 @@ func NewTeamTrialsPage(dataStore *data.DataStore) *fyne.Container {
 	}
 
 	// Individual score histograms
-	steps := 10
+	stepSize := 5000
 	scores := resultSet.GetMyScores()
 	maxScore := 0
 	umaScoreData := make(map[int]*coord.NumericalPointSeries, len(scores))
 	for trainedCharaId, scoreArray := range scores {
-		umaScoreData[trainedCharaId] = calculateScoreData(*scoreArray, steps)
+		umaScoreData[trainedCharaId] = calculateScoreData(*scoreArray, stepSize)
 		// Max score for histogram range
 		max := scoreArray.Max()
 		if maxScore < max {
@@ -48,7 +53,7 @@ func NewTeamTrialsPage(dataStore *data.DataStore) *fyne.Container {
 	cols := tableData.Columns()
 	table := newVetTable(tableData.Headers(), cols, tableData.ColumnWidths())
 	table.OnSelected = func(id widget.TableCellID) {
-		swapHistogram(chart, umaScoreData[tableData.GetTrainedCharaId(id.Row)], 2000)
+		swapHistogram(chart, umaScoreData[tableData.GetTrainedCharaId(id.Row)], float64(stepSize)*BAR_WIDTH_MODIFIER)
 	}
 	// Filter buttons for TT veteran table
 
@@ -60,6 +65,7 @@ func NewTeamTrialsPage(dataStore *data.DataStore) *fyne.Container {
 	return container.NewStack(split)
 }
 
+// Replaces a chart's point series with new ones
 func swapHistogram(chart *coord.CartesianNumericalChart, nps *coord.NumericalPointSeries, barWidth float64) {
 	chart.RemoveSeries("data")
 	chart.AddBarSeries(nps, barWidth)
@@ -76,9 +82,10 @@ func newScoreHistogram(maxScore int) *coord.CartesianNumericalChart {
 	return chart
 }
 
-func calculateScoreData(scoreArray races.ScoreArray, steps int) *coord.NumericalPointSeries {
+// calculateScoreData transforms ScoreArray Scores into histogram coordinates
+func calculateScoreData(scoreArray races.ScoreArray, stepSize int) *coord.NumericalPointSeries {
 	finalScoreData := []gdata.NumericalPoint{}
-	xPts, yPts := scoreArray.HistogramCoords(steps)
+	xPts, yPts := scoreArray.HistogramCoords(stepSize)
 	for i := range xPts {
 		point := gdata.NumericalPoint{
 			N:   float64(xPts[i]),
