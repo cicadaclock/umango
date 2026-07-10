@@ -51,16 +51,16 @@ func (s ScoreArray) Filter(indices []int) ScoreArray {
 
 // HistogramCoords returns a pair of ([]x, []y) allocated into buckets
 func (s ScoreArray) HistogramCoords(stepSize int) ([]int, []int) {
-	bMax := getScoreBucketIndex(s.Max(), stepSize)
-	bMin := getScoreBucketIndex(s.Min(), stepSize)
-	numBuckets := (bMax - bMin) + 1
-	xPts := make([]int, numBuckets)
-	yPts := make([]int, numBuckets)
-
+	counts := make(map[int]int)
 	for _, score := range s.Score {
-		i := getScoreBucketIndex(score, stepSize) - bMin
-		xPts[i] = stepSize * (bMin + i)
-		yPts[i]++
+		counts[getScoreBucketIndex(score, stepSize)]++
+	}
+
+	xPts := make([]int, 0, len(counts))
+	yPts := make([]int, 0, len(counts))
+	for i, b := range counts {
+		xPts = append(xPts, i*stepSize)
+		yPts = append(yPts, b)
 	}
 	return xPts, yPts
 }
