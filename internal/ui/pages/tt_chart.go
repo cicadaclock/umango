@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"sort"
+	"strconv"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -20,6 +22,15 @@ const (
 	// Size modifier for histogram to prevent flickering between bars when resizing
 	BAR_WIDTH_MODIFIER = 1.05
 	BAR_WIDTH          = 5000
+)
+
+type SORT_STATE int
+
+const (
+	ASCENDING SORT_STATE = iota
+	DESCENDING
+	UNSORTED
+	SORT_STATE_SIZE
 )
 
 func NewTeamTrialsPage(dataStore *data.DataStore) *fyne.Container {
@@ -51,17 +62,37 @@ func NewTeamTrialsPage(dataStore *data.DataStore) *fyne.Container {
 
 	// TT veteran table
 	tableData := races.NewTableData(dataStore, resultSet)
+	headers := tableData.Headers()
 	cols := tableData.Columns()
-	table := newVetTable(tableData.Headers(), cols, tableData.ColumnWidths())
+	filteredCols := cols
+	table := newVetTable(headers, filteredCols, tableData.ColumnWidths())
+	// Select row
 	table.OnSelected = func(id widget.TableCellID) {
-		swapHistogram(chart, umaScoreData[tableData.GetTrainedCharaId(id.Row)], float64(BAR_WIDTH)*BAR_WIDTH_MODIFIER)
+		i, _ := strconv.Atoi(filteredCols[0][id.Row])
+		swapHistogram(chart, umaScoreData[i], float64(BAR_WIDTH)*BAR_WIDTH_MODIFIER)
+	}
+	// Sort on header click
+	table.UpdateHeader = func(id widget.TableCellID, cell fyne.CanvasObject) {
+		b := cell.(*widget.Button)
+		// Set the button only when we need to
+		if b.Text != headers[id.Col] {
+			b.SetText(headers[id.Col])
+			b.OnTapped = func() {
+				table.UnselectAll()
+				sortCols(ASCENDING, id.Col, filteredCols)
+				table.Refresh()
+			}
+		}
 	}
 	// Filter buttons for TT veteran table
+	filters := container.NewWithoutLayout()
 
 	// Page containers
+	leftSide := container.NewBorder(filters, nil, nil, nil, table)
 	rightSide := container.NewVSplit(chart, skillTable)
 	rightSide.SetOffset(0.45)
-	split := container.NewHSplit(table, rightSide)
+
+	split := container.NewHSplit(leftSide, rightSide)
 	split.SetOffset(0.7)
 	return container.NewStack(split)
 }
@@ -120,23 +151,64 @@ func newVetTable(headers []string, cols [][]string, colWidths []int) *widget.Tab
 		},
 	)
 
+	// Headers
 	table.ShowHeaderRow = true
 	table.CreateHeader = func() fyne.CanvasObject {
-		label := widget.NewLabel("")
-		label.TextStyle.Bold = true
-		return label
+		b := widget.NewButton("temp", func() {})
+		return b
 	}
-	table.UpdateHeader = func(id widget.TableCellID, cell fyne.CanvasObject) {
-		label := cell.(*widget.Label)
-		// SetText calls Refresh(), so set the text only when we need to
-		if label.Text != headers[id.Col] {
-			label.SetText(headers[id.Col])
-		}
-	}
-
 	for col, length := range colWidths {
 		table.SetColumnWidth(col, (float32(length)*7)+24)
 	}
 
 	return table
+}
+
+func (state SORT_STATE) Next() SORT_STATE {
+	state = (state + 1) % SORT_STATE_SIZE
+	return state
+}
+
+func sortCols(sortState SORT_STATE, colToSort int, cols [][]string) [][]string {
+	if cols == nil {
+		panic("cols must be non-nil on sort")
+	}
+
+	sortStruct := ColsSort{
+		sortState: sortState,
+		colSort:   colToSort,
+		cols:      cols,
+	}
+
+	sort.Sort(sortStruct)
+
+	return sortStruct.cols
+}
+
+type ColsSort struct {
+	sortState SORT_STATE
+	colSort   int
+	cols      [][]string
+}
+
+func (c ColsSort) Len() int {
+	return len(c.cols[0])
+}
+
+func (c ColsSort) Swap(i, j int) {
+	for _, col := range c.cols {
+		col[i], col[j] = col[j], col[i]
+	}
+}
+
+func (c ColsSort) Less(i, j int) bool {
+	switch c.sortState {
+	case ASCENDING:
+		return c.cols[c.colSort][i] < c.cols[c.colSort][j]
+	case DESCENDING:
+		return c.cols[c.colSort][i] > c.cols[c.colSort][j]
+	case UNSORTED:
+		return false
+	}
+	return false
 }
