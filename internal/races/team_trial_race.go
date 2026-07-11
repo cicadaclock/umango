@@ -33,6 +33,24 @@ func (ttrs TeamTrialResultSet) GetMyCharaData() map[int]RaceHorseData {
 	return result
 }
 
+// GetMyUmaOrder returns TrainedCharaIds in appearance order, starting
+// with the most recently loaded result
+func (ttrs TeamTrialResultSet) GetMyUmaOrder() []int {
+	order := make([]int, 0, 15)
+	seen := make(map[int]bool, 15)
+	for i := len(ttrs.Set) - 1; i >= 0; i-- {
+		for _, raceParams := range ttrs.Set[i].RaceStartParamsArray {
+			for _, uma := range raceParams.GetMyUmas() {
+				if !seen[uma.TrainedCharaId] {
+					seen[uma.TrainedCharaId] = true
+					order = append(order, uma.TrainedCharaId)
+				}
+			}
+		}
+	}
+	return order
+}
+
 // Maps TrainedCharaIds to scores
 func (ttrs TeamTrialResultSet) GetMyScores() map[int]*ScoreArray {
 	scores := make(map[int]*ScoreArray)

@@ -5,8 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"sort"
-	"strconv"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -22,15 +20,6 @@ const (
 	// Size modifier for histogram to prevent flickering between bars when resizing
 	BAR_WIDTH_MODIFIER = 1.05
 	BAR_WIDTH          = 5000
-)
-
-type SORT_STATE int
-
-const (
-	ASCENDING SORT_STATE = iota
-	DESCENDING
-	UNSORTED
-	SORT_STATE_SIZE
 )
 
 func NewTeamTrialsPage(dataStore *data.DataStore) *fyne.Container {
@@ -64,11 +53,10 @@ func NewTeamTrialsPage(dataStore *data.DataStore) *fyne.Container {
 	tableData := races.NewTableData(dataStore, resultSet)
 	headers := tableData.Headers()
 	cols := tableData.Columns()
-	filteredCols := cols
-	table := newVetTable(headers, filteredCols, tableData.ColumnWidths())
+	table := newVetTable(headers, cols, tableData.ColumnWidths())
 	// Select row
 	table.OnSelected = func(id widget.TableCellID) {
-		i, _ := strconv.Atoi(filteredCols[0][id.Row])
+		i := tableData.GetTrainedCharaId(id.Row)
 		swapHistogram(chart, umaScoreData[i], float64(BAR_WIDTH)*BAR_WIDTH_MODIFIER)
 	}
 	// Sort on header click
@@ -79,7 +67,10 @@ func NewTeamTrialsPage(dataStore *data.DataStore) *fyne.Container {
 			b.SetText(headers[id.Col])
 			b.OnTapped = func() {
 				table.UnselectAll()
-				sortCols(ASCENDING, id.Col, filteredCols)
+				tableData.Sort(id.Col)
+				for i, col := range tableData.Columns() {
+					copy(cols[i], col)
+				}
 				table.Refresh()
 			}
 		}
@@ -162,53 +153,4 @@ func newVetTable(headers []string, cols [][]string, colWidths []int) *widget.Tab
 	}
 
 	return table
-}
-
-func (state SORT_STATE) Next() SORT_STATE {
-	state = (state + 1) % SORT_STATE_SIZE
-	return state
-}
-
-func sortCols(sortState SORT_STATE, colToSort int, cols [][]string) [][]string {
-	if cols == nil {
-		panic("cols must be non-nil on sort")
-	}
-
-	sortStruct := ColsSort{
-		sortState: sortState,
-		colSort:   colToSort,
-		cols:      cols,
-	}
-
-	sort.Sort(sortStruct)
-
-	return sortStruct.cols
-}
-
-type ColsSort struct {
-	sortState SORT_STATE
-	colSort   int
-	cols      [][]string
-}
-
-func (c ColsSort) Len() int {
-	return len(c.cols[0])
-}
-
-func (c ColsSort) Swap(i, j int) {
-	for _, col := range c.cols {
-		col[i], col[j] = col[j], col[i]
-	}
-}
-
-func (c ColsSort) Less(i, j int) bool {
-	switch c.sortState {
-	case ASCENDING:
-		return c.cols[c.colSort][i] < c.cols[c.colSort][j]
-	case DESCENDING:
-		return c.cols[c.colSort][i] > c.cols[c.colSort][j]
-	case UNSORTED:
-		return false
-	}
-	return false
 }

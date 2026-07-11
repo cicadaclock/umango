@@ -1,8 +1,22 @@
 package races
 
 import (
+	"sort"
 	"strconv"
 )
+
+type SortState int
+
+const (
+	Unsorted SortState = iota
+	Ascending
+	Descending
+	sortStateSize
+)
+
+func (state SortState) Next() SortState {
+	return (state + 1) % sortStateSize
+}
 
 type TableMapper interface {
 	// Maps veteran card ID to chara name
@@ -20,25 +34,116 @@ type TableData struct {
 	MaxScores       []int
 	AvgScores       []int
 
-	DistanceFilter DistanceType
-	StyleFilter    RunStyle
+	// Original ordering that sorts by currently used umas
+	origIndexes []int
+
+	// Which column to sort by
+	sortColumn int
+	// How to sort the column
+	sortState SortState
 }
 
-// tableColumn represents TableData's header name and rendered data
+// tableColumn represents TableData's header name, rendered data,
+// and row ordering for sorting
 type tableColumn struct {
 	header string
 	value  func(td TableData) []string
+	less   func(td TableData, i, j int) bool
 }
 
 // Source of truth for column order and content
 var tableColumns = []tableColumn{
-	{"ID", func(td TableData) []string { return itoaSlice(td.TrainedCharaIds) }},
-	{"Name", func(td TableData) []string { return td.Names }},
-	{"Distance", func(td TableData) []string { return td.Distances }},
-	{"Style", func(td TableData) []string { return td.Styles }},
-	{"# Races", func(td TableData) []string { return itoaSlice(td.NumRaces) }},
-	{"Max", func(td TableData) []string { return itoaSlice(td.MaxScores) }},
-	{"Avg", func(td TableData) []string { return itoaSlice(td.AvgScores) }},
+	{
+		"ID",
+		func(td TableData) []string { return itoaSlice(td.TrainedCharaIds) },
+		func(td TableData, i, j int) bool {
+			switch td.sortState {
+			case Ascending:
+				return td.TrainedCharaIds[i] < td.TrainedCharaIds[j]
+			case Descending:
+				return td.TrainedCharaIds[i] > td.TrainedCharaIds[j]
+			}
+			return false
+		},
+	},
+	{
+		"Name",
+		func(td TableData) []string { return td.Names },
+		func(td TableData, i, j int) bool {
+			switch td.sortState {
+			case Ascending:
+				return td.Names[i] < td.Names[j]
+			case Descending:
+				return td.Names[i] > td.Names[j]
+			}
+			return false
+		},
+	},
+	{
+		"Distance",
+		func(td TableData) []string { return td.Distances },
+		func(td TableData, i, j int) bool {
+			switch td.sortState {
+			case Ascending:
+				return td.DistanceTypes[i] < td.DistanceTypes[j]
+			case Descending:
+				return td.DistanceTypes[i] > td.DistanceTypes[j]
+			}
+			return false
+		},
+	},
+	{
+		"Style",
+		func(td TableData) []string { return td.Styles },
+		func(td TableData, i, j int) bool {
+			switch td.sortState {
+			case Ascending:
+				return td.StyleTypes[i] < td.StyleTypes[j]
+			case Descending:
+				return td.StyleTypes[i] > td.StyleTypes[j]
+			}
+			return false
+		},
+	},
+	{
+		"# Races",
+		func(td TableData) []string { return itoaSlice(td.NumRaces) },
+		func(td TableData, i, j int) bool {
+			switch td.sortState {
+			case Ascending:
+				return td.NumRaces[i] < td.NumRaces[j]
+			case Descending:
+				return td.NumRaces[i] > td.NumRaces[j]
+			}
+			return false
+		},
+	},
+	{
+		"Max",
+		func(td TableData) []string { return itoaSlice(td.MaxScores) },
+		func(td TableData, i, j int) bool {
+			switch td.sortState {
+			case Ascending:
+				return td.MaxScores[i] < td.MaxScores[j]
+			case Descending:
+				return td.MaxScores[i] > td.MaxScores[j]
+			}
+			return false
+		},
+	},
+	{
+		"Avg",
+		func(td TableData) []string { return itoaSlice(td.AvgScores) },
+		func(td TableData, i, j int) bool {
+			switch td.sortState {
+			case Ascending:
+				return td.AvgScores[i] < td.AvgScores[j]
+			case Descending:
+				return td.AvgScores[i] > td.AvgScores[j]
+			}
+			return false
+		},
+	},
 }
 
 func NewTableData(dataStore TableMapper, ttrs TeamTrialResultSet) TableData {
@@ -56,9 +161,15 @@ func NewTableData(dataStore TableMapper, ttrs TeamTrialResultSet) TableData {
 		NumRaces:        make([]int, 0, len(scores)),
 		MaxScores:       make([]int, 0, len(scores)),
 		AvgScores:       make([]int, 0, len(scores)),
+		origIndexes:     make([]int, 0, len(scores)),
 	}
 
-	for trainedCharaId, scoreArray := range scores {
+	// Sort rows by latest-race order, the first 5-15 umas are the current team
+	for _, trainedCharaId := range ttrs.GetMyUmaOrder() {
+		scoreArray, ok := scores[trainedCharaId]
+		if !ok {
+			continue
+		}
 		uma := umaData[trainedCharaId]
 
 		result.TrainedCharaIds = append(result.TrainedCharaIds, trainedCharaId)
@@ -70,6 +181,7 @@ func NewTableData(dataStore TableMapper, ttrs TeamTrialResultSet) TableData {
 		result.NumRaces = append(result.NumRaces, scoreArray.Len())
 		result.MaxScores = append(result.MaxScores, scoreArray.Max())
 		result.AvgScores = append(result.AvgScores, scoreArray.Average())
+		result.origIndexes = append(result.origIndexes, len(result.origIndexes))
 	}
 	return result
 }
@@ -86,12 +198,51 @@ func (td TableData) Filter(indices []int) TableData {
 		NumRaces:        filterSlice(td.NumRaces, indices),
 		MaxScores:       filterSlice(td.MaxScores, indices),
 		AvgScores:       filterSlice(td.AvgScores, indices),
+		origIndexes:     filterSlice(td.origIndexes, indices),
 	}
 	return result
 }
 
 func (td TableData) Len() int {
 	return len(td.TrainedCharaIds)
+}
+
+// Swap exchanges rows i and j across all columns
+func (td TableData) Swap(i, j int) {
+	swapSlice(td.TrainedCharaIds, i, j)
+	swapSlice(td.Names, i, j)
+	swapSlice(td.Distances, i, j)
+	swapSlice(td.DistanceTypes, i, j)
+	swapSlice(td.Styles, i, j)
+	swapSlice(td.StyleTypes, i, j)
+	swapSlice(td.NumRaces, i, j)
+	swapSlice(td.MaxScores, i, j)
+	swapSlice(td.AvgScores, i, j)
+	swapSlice(td.origIndexes, i, j)
+}
+
+// Less compares the sortColumn's rows i and j
+//
+// Unsorted rows compare by their original indices to revert sorting
+func (td TableData) Less(i, j int) bool {
+	if td.sortState == Unsorted {
+		return td.origIndexes[i] < td.origIndexes[j]
+	}
+	return tableColumns[td.sortColumn].less(td, i, j)
+}
+
+// Sort reorders all rows in place by the given column
+//
+// Consecutive sorts on the same column cycle through ascending, descending, and the
+// original order
+func (td *TableData) Sort(col int) {
+	if col == td.sortColumn {
+		td.sortState = td.sortState.Next()
+	} else {
+		td.sortState = Ascending
+	}
+	td.sortColumn = col
+	sort.Sort(td)
 }
 
 // Header names for each column
@@ -139,6 +290,10 @@ func itoaSlice(a []int) []string {
 		result = append(result, strconv.Itoa(i))
 	}
 	return result
+}
+
+func swapSlice[T any](s []T, i, j int) {
+	s[i], s[j] = s[j], s[i]
 }
 
 func filterSlice[T any](s []T, indices []int) []T {
