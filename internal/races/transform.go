@@ -33,6 +33,7 @@ type TableData struct {
 	NumRaces        []int
 	MaxScores       []int
 	AvgScores       []int
+	Fielded         []bool
 
 	// Original ordering that sorts by currently used umas
 	origIndexes []int
@@ -62,6 +63,19 @@ var tableColumns = []tableColumn{
 				return td.TrainedCharaIds[i] < td.TrainedCharaIds[j]
 			case Descending:
 				return td.TrainedCharaIds[i] > td.TrainedCharaIds[j]
+			}
+			return false
+		},
+	},
+	{
+		"Fielded",
+		func(td TableData) []string { return btoaSlice(td.Fielded) },
+		func(td TableData, i, j int) bool {
+			switch td.sortState {
+			case Ascending:
+				return compareBool(td.Fielded[j], td.Fielded[i])
+			case Descending:
+				return compareBool(td.Fielded[i], td.Fielded[j])
 			}
 			return false
 		},
@@ -161,11 +175,13 @@ func NewTableData(dataStore TableMapper, ttrs TeamTrialResultSet) TableData {
 		NumRaces:        make([]int, 0, len(scores)),
 		MaxScores:       make([]int, 0, len(scores)),
 		AvgScores:       make([]int, 0, len(scores)),
+		Fielded:         make([]bool, 0, len(scores)),
 		origIndexes:     make([]int, 0, len(scores)),
 	}
 
 	// Sort rows by latest-race order, the first 5-15 umas are the current team
-	for _, trainedCharaId := range ttrs.GetMyUmaOrder() {
+	trainedCharaIds, count := ttrs.GetMyUmaOrder()
+	for i, trainedCharaId := range trainedCharaIds {
 		scoreArray, ok := scores[trainedCharaId]
 		if !ok {
 			continue
@@ -181,7 +197,8 @@ func NewTableData(dataStore TableMapper, ttrs TeamTrialResultSet) TableData {
 		result.NumRaces = append(result.NumRaces, scoreArray.Len())
 		result.MaxScores = append(result.MaxScores, scoreArray.Max())
 		result.AvgScores = append(result.AvgScores, scoreArray.Average())
-		result.origIndexes = append(result.origIndexes, len(result.origIndexes))
+		result.Fielded = append(result.Fielded, i < count)
+		result.origIndexes = append(result.origIndexes, i)
 	}
 	return result
 }
@@ -198,6 +215,7 @@ func (td TableData) Filter(indices []int) TableData {
 		NumRaces:        filterSlice(td.NumRaces, indices),
 		MaxScores:       filterSlice(td.MaxScores, indices),
 		AvgScores:       filterSlice(td.AvgScores, indices),
+		Fielded:         filterSlice(td.Fielded, indices),
 		origIndexes:     filterSlice(td.origIndexes, indices),
 	}
 	return result
@@ -218,6 +236,7 @@ func (td TableData) Swap(i, j int) {
 	swapSlice(td.NumRaces, i, j)
 	swapSlice(td.MaxScores, i, j)
 	swapSlice(td.AvgScores, i, j)
+	swapSlice(td.Fielded, i, j)
 	swapSlice(td.origIndexes, i, j)
 }
 
@@ -292,6 +311,15 @@ func itoaSlice(a []int) []string {
 	return result
 }
 
+// btoaSlice converts a slice of bools to a slice of strings
+func btoaSlice(a []bool) []string {
+	result := make([]string, 0, len(a))
+	for _, i := range a {
+		result = append(result, strconv.FormatBool(i))
+	}
+	return result
+}
+
 func swapSlice[T any](s []T, i, j int) {
 	s[i], s[j] = s[j], s[i]
 }
@@ -305,4 +333,9 @@ func filterSlice[T any](s []T, indices []int) []T {
 		result = append(result, s[i])
 	}
 	return result
+}
+
+// compareBool reports whether x is greater than y, where true > false
+func compareBool(x, y bool) bool {
+	return x && !y
 }
