@@ -53,7 +53,7 @@ func NewTeamTrialsPage(dataStore *data.DataStore) *fyne.Container {
 	tableData := races.NewTableData(dataStore, resultSet)
 	headers := tableData.Headers()
 	cols := tableData.Columns()
-	table := newVetTable(headers, cols, tableData.ColumnWidths())
+	table := newTable(headers, cols, tableData.ColumnWidths())
 	// Select row
 	table.OnSelected = func(id widget.TableCellID) {
 		i := tableData.GetTrainedCharaId(id.Row)
@@ -123,8 +123,8 @@ func calculateScoreData(scoreArray races.ScoreArray, stepSize int) (*coord.Numer
 	return nps, slices.Max(yPts)
 }
 
-// newVetTable summarizes all sampled races
-func newVetTable(headers []string, cols [][]string, colWidths []int) *widget.Table {
+// newTable creates a table with the given headers and columns
+func newTable(headers []string, cols [][]string, colWidths []int) *widget.Table {
 	table := widget.NewTable(
 		func() (int, int) {
 			return len(cols[0]), len(headers)
