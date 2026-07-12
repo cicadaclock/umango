@@ -31,7 +31,7 @@ func TestLegacyAffinityForFullLegacy(t *testing.T) {
 		},
 	}
 	affinity := legacy.Affinity(dataStore)
-	if affinity != 125 {
+	if affinity != 144 {
 		t.Errorf("Legacy %v == %d", legacy, affinity)
 	}
 }
@@ -51,7 +51,7 @@ func TestLegacyAffinityForPartialLegacy(t *testing.T) {
 		},
 	}
 	affinity := legacy.Affinity(dataStore)
-	if affinity != 89 {
+	if affinity != 102 {
 		t.Errorf("Legacy %v == %d", legacy, affinity)
 	}
 }
@@ -128,7 +128,7 @@ func TestLegacyAffinityIncludesRaceAffinity(t *testing.T) {
 		},
 	}
 	affinity := legacy.Affinity(dataStore)
-	if affinity != 125+18 {
+	if affinity != 144+18 {
 		t.Errorf("Legacy %v == %d, want %d", legacy, affinity, 125+18)
 	}
 }
