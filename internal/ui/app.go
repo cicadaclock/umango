@@ -3,7 +3,6 @@ package ui
 import (
 	"embed"
 	"fmt"
-	"runtime"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -43,26 +42,22 @@ func App(assets embed.FS) error {
 		)
 
 		var g errgroup.Group
-		g.SetLimit(runtime.GOMAXPROCS(0))
 		g.Go(func() error {
-			dataStore, err = data.Init()
-			if err != nil {
-				return err
-			}
-			return nil
+			d, err := data.Init()
+			dataStore = d
+			return err
 		})
 		g.Go(func() error {
-			resultSet, err = pages.LoadTeamTrialResults()
-			if err != nil {
-				return err
-			}
-			return nil
+			r, err := pages.LoadTeamTrialResults()
+			resultSet = r
+			return err
 		})
 		err := g.Wait()
 		if err != nil {
 			fyne.Do(func() {
 				window.SetContent(loadingErrorScreen(err))
 			})
+			return
 		}
 
 		ttData := pages.NewTeamTrialsData(dataStore, resultSet)
