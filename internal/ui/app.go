@@ -3,14 +3,17 @@ package ui
 import (
 	"embed"
 	"fmt"
+	"runtime"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
 	"github.com/cicadaclock/umango/internal/data"
+	"github.com/cicadaclock/umango/internal/races"
 	"github.com/cicadaclock/umango/internal/ui/apptheme"
 	"github.com/cicadaclock/umango/internal/ui/pages"
+	"golang.org/x/sync/errgroup"
 )
 
 var (
@@ -31,16 +34,41 @@ func App(assets embed.FS) error {
 	window.Resize(windowSize)
 	window.SetContent(loadingScreen())
 
-	// Async load master.mdb, shouldn't be too long but don't want to hang the UI
+	// Async load master.mdb and the saved races
 	// TODO: Also load veteran list from pre-existing config file?
 	go func() {
-		dataStore, err := data.Init()
-		fyne.Do(func() {
+		var (
+			dataStore *data.DataStore
+			resultSet races.TeamTrialResultSet
+		)
+
+		var g errgroup.Group
+		g.SetLimit(runtime.GOMAXPROCS(0))
+		g.Go(func() error {
+			dataStore, err = data.Init()
 			if err != nil {
-				window.SetContent(loadingErrorScreen(err))
-				return
+				return err
 			}
-			window.SetContent(mainMenu(dataStore, window))
+			return nil
+		})
+		g.Go(func() error {
+			resultSet, err = pages.LoadTeamTrialResults()
+			if err != nil {
+				return err
+			}
+			return nil
+		})
+		err := g.Wait()
+		if err != nil {
+			fyne.Do(func() {
+				window.SetContent(loadingErrorScreen(err))
+			})
+		}
+
+		ttData := pages.NewTeamTrialsData(dataStore, resultSet)
+
+		fyne.Do(func() {
+			window.SetContent(mainMenu(dataStore, ttData, window))
 		})
 	}()
 
@@ -51,7 +79,7 @@ func App(assets embed.FS) error {
 func loadingScreen() *fyne.Container {
 	progress := widget.NewProgressBarInfinite()
 	return container.NewCenter(container.NewVBox(
-		widget.NewLabel("Loading master.mdb..."),
+		widget.NewLabel("Loading master.mdb and saved races..."),
 		progress,
 	))
 }
@@ -62,12 +90,10 @@ func loadingErrorScreen(err error) *fyne.Container {
 	return container.NewCenter(label)
 }
 
-func mainMenu(dataStore *data.DataStore, window fyne.Window) *fyne.Container {
+func mainMenu(dataStore *data.DataStore, ttData pages.TeamTrialsData, window fyne.Window) *fyne.Container {
 	tabs := container.NewAppTabs(
-		container.NewTabItem("Veterans", pages.Veterans()),
-		container.NewTabItem("Optimizer", pages.Optimizer()),
+		container.NewTabItem("TT Chart", pages.NewTeamTrialsPage(ttData)),
 		container.NewTabItem("Veteran List", pages.VeteranList(dataStore, window)),
-		container.NewTabItem("TT Chart", pages.NewTeamTrialsPage(dataStore)),
 	)
 	tabs.SetTabLocation(container.TabLocationTop)
 	c := container.NewStack(tabs)

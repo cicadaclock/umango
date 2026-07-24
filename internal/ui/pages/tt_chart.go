@@ -1,7 +1,6 @@
 package pages
 
 import (
-	"math"
 	"os"
 	"path/filepath"
 	"slices"
@@ -22,27 +21,48 @@ const (
 	BAR_WIDTH          = 5000
 )
 
-func NewTeamTrialsPage(dataStore *data.DataStore) *fyne.Container {
-	// Get data, hardcoded path for now
+// TeamTrialsData holds everything the team trials page needs to render
+type TeamTrialsData struct {
+	Scores    map[int]*races.ScoreArray
+	TableData races.TableData
+}
+
+// LoadTeamTrialResults loads the saved team trial races from a hardcoded
+// directory
+func LoadTeamTrialResults() (races.TeamTrialResultSet, error) {
+	// Hardcoded path for now
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return container.NewWithoutLayout()
+		return races.TeamTrialResultSet{}, err
 	}
-	resultSet, err := races.LoadRacesFolder(filepath.Join(home, "Documents", "Saved races", "Team trials"))
-	if err != nil {
+	return races.LoadRacesFolder(filepath.Join(home, "Documents", "Saved races", "Team trials"))
+}
+
+// NewTeamTrialsData aggregates loaded races into the page's inputs. It reads
+// chara titles out of master.mdb, so it runs once both loads have finished -
+// still off the UI thread.
+func NewTeamTrialsData(dataStore *data.DataStore, resultSet races.TeamTrialResultSet) TeamTrialsData {
+	return TeamTrialsData{
+		Scores:    resultSet.GetMyScores(),
+		TableData: races.NewTableData(dataStore, resultSet),
+	}
+}
+
+// NewTeamTrialsPage builds the page widgets and must be called on the UI thread.
+func NewTeamTrialsPage(ttData TeamTrialsData) *fyne.Container {
+	if ttData.Err != nil {
 		return container.NewWithoutLayout()
 	}
 
 	// Individual score histograms
-	scores := resultSet.GetMyScores()
 	maxScore, maxFreq := 0, 0
-	umaScoreData := make(map[int]*coord.NumericalPointSeries, len(scores))
-	for trainedCharaId, scoreArray := range scores {
+	umaScoreData := make(map[int]*coord.NumericalPointSeries, len(ttData.Scores))
+	for trainedCharaId, scoreArray := range ttData.Scores {
 		nps, freq := calculateScoreData(*scoreArray, BAR_WIDTH)
 		umaScoreData[trainedCharaId] = nps
 		// Max score for histogram range
-		maxScore = int(math.Max(float64(maxScore), float64(scoreArray.Max())))
-		maxFreq = int(math.Max(float64(maxFreq), float64(freq)))
+		maxScore = max(maxScore, scoreArray.Max())
+		maxFreq = max(maxFreq, freq)
 	}
 	chart := newScoreHistogram(maxScore, maxFreq)
 
@@ -50,7 +70,7 @@ func NewTeamTrialsPage(dataStore *data.DataStore) *fyne.Container {
 	skillTable := container.NewWithoutLayout()
 
 	// TT veteran table
-	tableData := races.NewTableData(dataStore, resultSet)
+	tableData := ttData.TableData
 	headers := tableData.Headers()
 	cols := tableData.Columns()
 	table := newTable(headers, cols, tableData.ColumnWidths())
