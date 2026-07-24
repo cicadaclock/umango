@@ -1,7 +1,6 @@
 package races
 
 import (
-	"math"
 	"slices"
 )
 
@@ -66,5 +65,5 @@ func (s ScoreArray) HistogramCoords(stepSize int) ([]int, []int) {
 }
 
 func getScoreBucketIndex(score, stepSize int) int {
-	return int(math.Ceil(float64(score) / float64(stepSize)))
+	return score / stepSize
 }
