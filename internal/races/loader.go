@@ -6,38 +6,58 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
+
+	"golang.org/x/sync/errgroup"
 )
 
 func LoadRacesFolder(directoryPath string) (TeamTrialResultSet, error) {
 	resultSet := TeamTrialResultSet{}
-	_, err := os.ReadDir(directoryPath)
+	var paths []string
+	err := filepath.WalkDir(directoryPath, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			if d == nil {
+				return err
+			}
+			return nil
+		}
+		if d.IsDir() || filepath.Ext(d.Name()) != ".json" {
+			return nil
+		}
+		paths = append(paths, path)
+		return nil
+	})
 	if err != nil {
 		return resultSet, err
 	}
-	filepath.WalkDir(directoryPath, func(path string, d fs.DirEntry, err error) error {
-		if d.IsDir() {
-			return nil
-		} else if filepath.Ext(d.Name()) != ".json" {
-			return nil
-		}
 
-		teamTrialResult, err := LoadRaces(path)
-		// If parsing race results fails, just skip it
-		if err != nil {
+	// Pre-size the slice so order is retained
+	parsed := make([]*TeamTrialResult, len(paths))
+	var g errgroup.Group
+	g.SetLimit(runtime.GOMAXPROCS(0))
+	for i, path := range paths {
+		g.Go(func() error {
+			teamTrialResult, err := LoadRaces(path)
+			// If parsing race results fails, just skip it
+			if err != nil {
+				return nil
+			}
+			// Check correctness of data
+			if !teamTrialResult.HasCorrectRaceCount() ||
+				!teamTrialResult.IsInAscendingOrder() {
+				return nil
+			}
+			parsed[i] = &teamTrialResult
 			return nil
+		})
+	}
+	_ = g.Wait()
+	resultSet.Set = make([]TeamTrialResult, 0, len(paths))
+	for _, teamTrialResult := range parsed {
+		if teamTrialResult != nil {
+			resultSet.append(*teamTrialResult)
 		}
-		// Check correctness of data
-		if !teamTrialResult.HasCorrectRaceCount() {
-			return nil
-		}
-		if !teamTrialResult.IsInAscendingOrder() {
-			return nil
-		}
-
-		resultSet.append(teamTrialResult)
-		return nil
-	})
-
+	}
 	return resultSet, nil
 }
 
