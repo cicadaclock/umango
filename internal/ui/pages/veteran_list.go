@@ -49,10 +49,11 @@ func VeteranList(dataStore *data.DataStore, window fyne.Window) *fyne.Container 
 		}
 	}
 	veteranFileDialog.SetLocation(listDir)
-	veteranFileDialog.Resize(fyne.NewSize(500, 500))
 	loadVeteranButton := widget.NewButton("Load",
 		func() {
 			veteranFileDialog.Show()
+			// Since Fyne 2.8, resizing a FileDialog before showing it panics
+			veteranFileDialog.Resize(fyne.NewSize(500, 500))
 		},
 	)
 	header := container.NewHBox(loadVeteranButton)
