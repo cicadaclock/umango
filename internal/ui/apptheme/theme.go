@@ -34,14 +34,14 @@ var (
 
 type AppTheme struct {
 	DefaultTheme fyne.Theme
-	DefaultFont  []byte
+	DefaultFont  fyne.Resource
 }
 
 var _ fyne.Theme = (*AppTheme)(nil)
 
 func NewAppTheme(defaultFont []byte) AppTheme {
 	return AppTheme{
-		DefaultFont:  defaultFont,
+		DefaultFont:  fyne.NewStaticResource("defaultFont", defaultFont),
 		DefaultTheme: style.NewColorPaletteTheme(theme.DefaultTheme()),
 	}
 }
@@ -74,8 +74,7 @@ func (m AppTheme) Icon(name fyne.ThemeIconName) fyne.Resource {
 }
 
 func (m AppTheme) Font(style fyne.TextStyle) fyne.Resource {
-	font := fyne.NewStaticResource("defaultFont", m.DefaultFont)
-	return font
+	return m.DefaultFont
 }
 
 func (m AppTheme) Size(name fyne.ThemeSizeName) float32 {
