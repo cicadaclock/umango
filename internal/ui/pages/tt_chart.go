@@ -50,10 +50,6 @@ func NewTeamTrialsData(dataStore *data.DataStore, resultSet races.TeamTrialResul
 
 // NewTeamTrialsPage builds the page widgets and must be called on the UI thread.
 func NewTeamTrialsPage(ttData TeamTrialsData) *fyne.Container {
-	if ttData.Err != nil {
-		return container.NewWithoutLayout()
-	}
-
 	// Individual score histograms
 	maxScore, maxFreq := 0, 0
 	umaScoreData := make(map[int]*coord.NumericalPointSeries, len(ttData.Scores))
