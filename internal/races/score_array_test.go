@@ -77,3 +77,14 @@ func TestScoreArrayFilter(t *testing.T) {
 		t.Errorf("filteredScore == %v, want [20 30]", filteredScore)
 	}
 }
+
+func TestScoreBucket(t *testing.T) {
+	scores := []int{3000, 5000, 44999, 45000, 45001}
+	want := []int{0, 1, 8, 9, 9}
+	for i, score := range scores {
+		got := getScoreBucketIndex(score, 5000)
+		if got != want[i] {
+			t.Errorf("getScoreBucketIndex(%[1]d, %[1]d) == %[2]d, want %[3]d", i, got, want)
+		}
+	}
+}

@@ -1,5 +1,7 @@
 package races
 
+import "slices"
+
 type TeamTrialResultSet struct {
 	Set []TeamTrialResult
 }
@@ -16,92 +18,73 @@ func (ttrs *TeamTrialResultSet) append(ttr TeamTrialResult) {
 	ttrs.Set = append(ttrs.Set, ttr)
 }
 
-// Maps TrainedCharaIds to RaceHorseData
-func (ttrs TeamTrialResultSet) GetMyCharaData() map[int]RaceHorseData {
-	result := make(map[int]RaceHorseData, 50)
-	visited := make(map[int]bool, 50)
-	for _, ttr := range ttrs.Set {
-		for _, raceParams := range ttr.RaceStartParamsArray {
-			for _, uma := range raceParams.GetMyUmas() {
-				if !visited[uma.TrainedCharaId] {
-					result[uma.TrainedCharaId] = uma
-					visited[uma.TrainedCharaId] = true
-				}
-			}
-		}
-	}
-	return result
+// TTUmaSummary aggregates team trial score results per uma
+// so that the TTRS only need to be walked once
+type TTUmaSummary struct {
+	// TrainedCharaIds is also in CharaData, but it's simpler to have a slice
+	TrainedCharaIds []int
+	CharaData       []RaceHorseData
+	Scores          []ScoreArray
+	DistanceTypes   []DistanceType
+	// FieldedCount counts the number of umas we are fielding on our team
+	FieldedCount int
 }
 
-// GetMyUmaOrder returns TrainedCharaIds in appearance order, starting
-// with the most recently loaded result, and also the number of umas on the latest team
-func (ttrs TeamTrialResultSet) GetMyUmaOrder() ([]int, int) {
-	order := make([]int, 0, 15)
-	seen := make(map[int]bool, 15)
-	counted := false
-	count := 0
-	// Reverse order to get the latest team first
-	for i := len(ttrs.Set) - 1; i >= 0; i-- {
-		for _, raceParams := range ttrs.Set[i].RaceStartParamsArray {
-			rhd := raceParams.GetMyUmas()
-			for _, uma := range rhd {
-				if !seen[uma.TrainedCharaId] {
-					seen[uma.TrainedCharaId] = true
-					order = append(order, uma.TrainedCharaId)
-				}
-			}
-			if !counted {
-				count += len(rhd)
-			}
-		}
-		if !counted {
-			counted = true
-		}
-	}
-	return order, count
+func (s TTUmaSummary) Len() int {
+	return len(s.TrainedCharaIds)
 }
 
-// Maps TrainedCharaIds to scores
-func (ttrs TeamTrialResultSet) GetMyScores() map[int]*ScoreArray {
-	scores := make(map[int]*ScoreArray)
-	for _, ttr := range ttrs.Set {
-		for _, charaResult := range ttr.GetMyCharaResults() {
-			if len(charaResult.ScoreEventArray) == 0 {
-				continue
-			}
-			scoreArray := scores[charaResult.TrainedCharaId]
-			if scoreArray == nil {
-				scoreArray = &ScoreArray{}
-				scores[charaResult.TrainedCharaId] = scoreArray
-			}
-			scoreArray.append(charaResult.TotalScore())
+// Summarize walks TTRS once, collecting anything needed into the TTUmaSummary
+func (ttrs TeamTrialResultSet) Summarize() TTUmaSummary {
+	s := TTUmaSummary{}
+	rows := make(map[int]int, 50)
+	// Iterate backwards so that the latest results are first
+	// This is needed to figure out the currently used umas
+	newest := true
+	for _, ttr := range slices.Backward(ttrs.Set) {
+		if !ttr.hasCorrectRaceCount() {
+			continue
 		}
-	}
-	return scores
-}
-
-// Maps TrainedCharaIds to DistanceTypes
-//
-// Assumes the first found race with a given character is its decided distance
-func (ttrs TeamTrialResultSet) GetUmaDistanceTypes() map[int]DistanceType {
-	result := make(map[int]DistanceType)
-	for _, ttr := range ttrs.Set {
-		for i := range 5 {
-			umas := ttr.RaceStartParamsArray[i].GetMyUmas()
+		for round := range 5 {
+			raceResult := ttr.RaceResultArray[round]
+			umas := ttr.RaceStartParamsArray[round].GetMyUmas()
+			// Count number of umas we are fielding
+			if newest {
+				s.FieldedCount += len(umas)
+			}
+			// Add uma result to summary
 			for _, uma := range umas {
-				if result[uma.TrainedCharaId] == 0 {
-					result[uma.TrainedCharaId] = ttr.RaceResultArray[i].DistanceType
+				index, exists := rows[uma.TrainedCharaId]
+				if !exists {
+					index = s.Len()
+					rows[uma.TrainedCharaId] = index
+					s.TrainedCharaIds = append(s.TrainedCharaIds, uma.TrainedCharaId)
+					s.CharaData = append(s.CharaData, uma)
+					s.Scores = append(s.Scores, ScoreArray{})
+					s.DistanceTypes = append(s.DistanceTypes, raceResult.DistanceType)
+				}
+				if result := raceResult.FindCharaResults(uma.TrainedCharaId); len(result.ScoreEventArray) > 0 {
+					s.Scores[index].append(result.TotalScore())
 				}
 			}
 		}
+		if newest {
+			newest = false
+		}
 	}
-	return result
+	return s
 }
 
-// Checks if RaceStartParamsArray and RaceResultArray rounds are matched
+// IsValidData returns whether this result has 5 races and matches rounds
+func (ttr TeamTrialResult) IsValidData() bool {
+	return ttr.hasMatchingRounds() && ttr.hasCorrectRaceCount()
+}
+
+// hasMatchingRounds checks if RaceStartParamsArray and RaceResultArray rounds
+// are matched
 //
 // Guarantees data processing can occur on both arrays using the same index
-func (ttr TeamTrialResult) IsInAscendingOrder() bool {
+func (ttr TeamTrialResult) hasMatchingRounds() bool {
 	for i := range 5 {
 		if ttr.RaceStartParamsArray[i].Round != ttr.RaceResultArray[i].Round {
 			return false
@@ -110,25 +93,7 @@ func (ttr TeamTrialResult) IsInAscendingOrder() bool {
 	return true
 }
 
-// Checks if 5 races occur in a team trial result like expected
-func (ttr TeamTrialResult) HasCorrectRaceCount() bool {
-	if len(ttr.RaceStartParamsArray) != 5 {
-		return false
-	}
-	if len(ttr.RaceResultArray) != 5 {
-		return false
-	}
-	return true
-}
-
-// Returns CharaResults for up to 15 umas in the race
-func (ttr TeamTrialResult) GetMyCharaResults() []CharaResult {
-	charaResults := make([]CharaResult, 0, 15)
-	for i := range 5 {
-		umas := ttr.RaceStartParamsArray[i].GetMyUmas()
-		for _, uma := range umas {
-			charaResults = append(charaResults, ttr.RaceResultArray[i].FindCharaResults(uma.TrainedCharaId))
-		}
-	}
-	return charaResults
+// hasCorrectRaceCount checks if 5 races occur in a team trial result
+func (ttr TeamTrialResult) hasCorrectRaceCount() bool {
+	return len(ttr.RaceStartParamsArray) == 5 && len(ttr.RaceResultArray) == 5
 }
