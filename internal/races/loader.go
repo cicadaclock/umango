@@ -43,8 +43,7 @@ func LoadRacesFolder(directoryPath string) (TeamTrialResultSet, error) {
 				return nil
 			}
 			// Check correctness of data
-			if !teamTrialResult.HasCorrectRaceCount() ||
-				!teamTrialResult.IsInAscendingOrder() {
+			if !teamTrialResult.IsValidData() {
 				return nil
 			}
 			parsed[i] = &teamTrialResult

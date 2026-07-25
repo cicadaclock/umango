@@ -160,44 +160,40 @@ var tableColumns = []tableColumn{
 	},
 }
 
-func NewTableData(dataStore TableMapper, ttrs TeamTrialResultSet) TableData {
-	scores := ttrs.GetMyScores()
-	umaData := ttrs.GetMyCharaData()
-	distances := ttrs.GetUmaDistanceTypes()
-
+func NewTableData(dataStore TableMapper, summary TTUmaSummary) TableData {
+	n := summary.Len()
 	result := TableData{
-		TrainedCharaIds: make([]int, 0, len(scores)),
-		Names:           make([]string, 0, len(scores)),
-		Distances:       make([]string, 0, len(scores)),
-		DistanceTypes:   make([]DistanceType, 0, len(scores)),
-		Styles:          make([]string, 0, len(scores)),
-		StyleTypes:      make([]RunStyle, 0, len(scores)),
-		NumRaces:        make([]int, 0, len(scores)),
-		MaxScores:       make([]int, 0, len(scores)),
-		AvgScores:       make([]int, 0, len(scores)),
-		Fielded:         make([]bool, 0, len(scores)),
-		origIndexes:     make([]int, 0, len(scores)),
+		TrainedCharaIds: make([]int, 0, n),
+		Names:           make([]string, 0, n),
+		Distances:       make([]string, 0, n),
+		DistanceTypes:   make([]DistanceType, 0, n),
+		Styles:          make([]string, 0, n),
+		StyleTypes:      make([]RunStyle, 0, n),
+		NumRaces:        make([]int, 0, n),
+		MaxScores:       make([]int, 0, n),
+		AvgScores:       make([]int, 0, n),
+		Fielded:         make([]bool, 0, n),
+		origIndexes:     make([]int, 0, n),
 	}
 
-	// Sort rows by latest-race order, the first 5-15 umas are the current team
-	trainedCharaIds, count := ttrs.GetMyUmaOrder()
-	for i, trainedCharaId := range trainedCharaIds {
-		scoreArray, ok := scores[trainedCharaId]
-		if !ok {
+	// Summary orders the current team first
+	for i := range n {
+		scores := summary.Scores[i]
+		if scores.Len() == 0 {
 			continue
 		}
-		uma := umaData[trainedCharaId]
+		uma := summary.CharaData[i]
 
-		result.TrainedCharaIds = append(result.TrainedCharaIds, trainedCharaId)
+		result.TrainedCharaIds = append(result.TrainedCharaIds, summary.TrainedCharaIds[i])
 		result.Names = append(result.Names, dataStore.VeteranCardCharaTitle([]int{uma.CardId})...)
-		result.Distances = append(result.Distances, distances[uma.TrainedCharaId].String())
-		result.DistanceTypes = append(result.DistanceTypes, distances[uma.TrainedCharaId])
+		result.Distances = append(result.Distances, summary.DistanceTypes[i].String())
+		result.DistanceTypes = append(result.DistanceTypes, summary.DistanceTypes[i])
 		result.Styles = append(result.Styles, uma.RunningStyle.String())
 		result.StyleTypes = append(result.StyleTypes, uma.RunningStyle)
-		result.NumRaces = append(result.NumRaces, scoreArray.Len())
-		result.MaxScores = append(result.MaxScores, scoreArray.Max())
-		result.AvgScores = append(result.AvgScores, scoreArray.Average())
-		result.Fielded = append(result.Fielded, i < count)
+		result.NumRaces = append(result.NumRaces, scores.Len())
+		result.MaxScores = append(result.MaxScores, scores.Max())
+		result.AvgScores = append(result.AvgScores, scores.Average())
+		result.Fielded = append(result.Fielded, i < summary.FieldedCount)
 		result.origIndexes = append(result.origIndexes, i)
 	}
 	return result
