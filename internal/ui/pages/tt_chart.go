@@ -23,7 +23,7 @@ const (
 
 // TeamTrialsData holds everything the team trials page needs to render
 type TeamTrialsData struct {
-	Scores    map[int]*races.ScoreArray
+	Summary   races.TTUmaSummary
 	TableData races.TableData
 }
 
@@ -42,9 +42,10 @@ func LoadTeamTrialResults() (races.TeamTrialResultSet, error) {
 // chara titles out of master.mdb, so it runs once both loads have finished -
 // still off the UI thread.
 func NewTeamTrialsData(dataStore *data.DataStore, resultSet races.TeamTrialResultSet) TeamTrialsData {
+	summary := resultSet.Summarize()
 	return TeamTrialsData{
-		Scores:    resultSet.GetMyScores(),
-		TableData: races.NewTableData(dataStore, resultSet),
+		Summary:   summary,
+		TableData: races.NewTableData(dataStore, summary),
 	}
 }
 
@@ -52,10 +53,13 @@ func NewTeamTrialsData(dataStore *data.DataStore, resultSet races.TeamTrialResul
 func NewTeamTrialsPage(ttData TeamTrialsData) *fyne.Container {
 	// Individual score histograms
 	maxScore, maxFreq := 0, 0
-	umaScoreData := make(map[int]*coord.NumericalPointSeries, len(ttData.Scores))
-	for trainedCharaId, scoreArray := range ttData.Scores {
-		nps, freq := calculateScoreData(*scoreArray, BAR_WIDTH)
-		umaScoreData[trainedCharaId] = nps
+	umaScoreData := make(map[int]*coord.NumericalPointSeries, ttData.Summary.Len())
+	for i, scoreArray := range ttData.Summary.Scores {
+		if scoreArray.Len() == 0 {
+			continue
+		}
+		nps, freq := calculateScoreData(scoreArray, BAR_WIDTH)
+		umaScoreData[ttData.Summary.TrainedCharaIds[i]] = nps
 		// Max score for histogram range
 		maxScore = max(maxScore, scoreArray.Max())
 		maxFreq = max(maxFreq, freq)
