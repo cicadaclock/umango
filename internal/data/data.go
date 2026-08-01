@@ -18,6 +18,8 @@ type DataStore struct {
 	ttRawScores               map[int]int
 
 	// Text mappings
+	// Skill ID to factor name
+	skillNames map[int]string
 	// Factor ID to factor name
 	factorNames map[int]string
 	// Veteran card ID to full chara title + name
@@ -43,6 +45,7 @@ func Init() (*DataStore, error) {
 	g.Go(func() (err error) { dataStore.cardData, err = db.CardData(); return })
 	g.Go(func() (err error) { dataStore.successionRelations, err = db.SuccessionRelations(); return })
 	g.Go(func() (err error) { dataStore.successionRelationMembers, err = db.SuccessionRelationMembers(); return })
+	g.Go(func() (err error) { dataStore.skillNames, err = db.TextDataSkills(); return })
 	g.Go(func() (err error) { dataStore.factorNames, err = db.TextDataFactors(); return })
 	g.Go(func() (err error) { dataStore.veteranCardId, err = db.TextDataVeteranCardId(); return })
 	g.Go(func() (err error) { dataStore.charaNames, err = db.TextDataCharaName(); return })
@@ -53,6 +56,15 @@ func Init() (*DataStore, error) {
 	}
 
 	return &dataStore, nil
+}
+
+// Maps skill ID to skill name
+func (dataStore *DataStore) SkillNames(ids []int) []string {
+	result := make([]string, 0, len(ids))
+	for _, id := range ids {
+		result = append(result, dataStore.skillNames[id])
+	}
+	return result
 }
 
 // Maps factor ID to factor name

@@ -14,6 +14,7 @@ const (
 	// text_data categories
 	textDataCardId    = 4
 	textDataCharaName = 6
+	textDataSkills    = 47
 	textDataFactors   = 147
 	textDataTTScore   = 140
 	textDataTTBonus   = 148
@@ -96,6 +97,15 @@ func (db *DB) TeamStadiumRawScores() (map[int]int, error) {
 }
 
 // Map skill_id to text from text_data
+func (db *DB) TextDataSkills() (map[int]string, error) {
+	result, err := db.textData(textDataSkills, 0, 0, false)
+	if err != nil {
+		return nil, fmt.Errorf("get skills: %w", err)
+	}
+	return result, nil
+}
+
+// Map factor_id to text from text_data
 func (db *DB) TextDataFactors() (map[int]string, error) {
 	result, err := db.textData(textDataFactors, 0, 0, false)
 	if err != nil {
