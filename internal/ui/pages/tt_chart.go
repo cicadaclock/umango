@@ -23,8 +23,8 @@ const (
 
 // TeamTrialsData holds everything the team trials page needs to render
 type TeamTrialsData struct {
-	Summary   races.TTUmaSummary
-	TableData races.TableData
+	Summary  races.TTUmaSummary
+	VetTable *races.Table[races.VetTableData]
 }
 
 // LoadTeamTrialResults loads the saved team trial races from a hardcoded
@@ -44,8 +44,8 @@ func LoadTeamTrialResults() (races.TeamTrialResultSet, error) {
 func NewTeamTrialsData(dataStore *data.DataStore, resultSet races.TeamTrialResultSet) TeamTrialsData {
 	summary := resultSet.Summarize()
 	return TeamTrialsData{
-		Summary:   summary,
-		TableData: races.NewTableData(dataStore, summary),
+		Summary:  summary,
+		VetTable: races.NewVetTable(dataStore, summary),
 	}
 }
 
@@ -70,13 +70,13 @@ func NewTeamTrialsPage(ttData TeamTrialsData) *fyne.Container {
 	skillTable := container.NewWithoutLayout()
 
 	// TT veteran table
-	tableData := ttData.TableData
-	headers := tableData.Headers()
-	cols := tableData.Columns()
-	table := newTable(headers, cols, tableData.ColumnWidths())
+	vetTable := ttData.VetTable
+	headers := vetTable.Headers()
+	cols := vetTable.Columns()
+	table := newTable(headers, cols, vetTable.ColumnWidths())
 	// Select row
 	table.OnSelected = func(id widget.TableCellID) {
-		i := tableData.GetTrainedCharaId(id.Row)
+		i := vetTable.Data().GetTrainedCharaId(id.Row)
 		swapHistogram(chart, umaScoreData[i], float64(BAR_WIDTH)*BAR_WIDTH_MODIFIER)
 	}
 	// Sort on header click
@@ -87,8 +87,8 @@ func NewTeamTrialsPage(ttData TeamTrialsData) *fyne.Container {
 			b.SetText(headers[id.Col])
 			b.OnTapped = func() {
 				table.UnselectAll()
-				tableData.Sort(id.Col)
-				for i, col := range tableData.Columns() {
+				vetTable.Sort(id.Col)
+				for i, col := range vetTable.Columns() {
 					copy(cols[i], col)
 				}
 				table.Refresh()
