@@ -1,29 +1,12 @@
 package races
 
-import (
-	"sort"
-	"strconv"
-)
-
-type SortState int
-
-const (
-	Unsorted SortState = iota
-	Ascending
-	Descending
-	sortStateSize
-)
-
-func (state SortState) Next() SortState {
-	return (state + 1) % sortStateSize
-}
-
 type TableMapper interface {
 	// Maps veteran card ID to chara name
 	VeteranCardCharaTitle(ids []int) []string
 }
 
-type TableData struct {
+// VetTableData holds the TT veteran rows in column-major order
+type VetTableData struct {
 	TrainedCharaIds []int
 	Names           []string
 	Distances       []string
@@ -37,28 +20,15 @@ type TableData struct {
 
 	// Original ordering that sorts by currently used umas
 	origIndexes []int
-
-	// Which column to sort by
-	sortColumn int
-	// How to sort the column
-	sortState SortState
-}
-
-// tableColumn represents TableData's header name, rendered data,
-// and row ordering for sorting
-type tableColumn struct {
-	header string
-	value  func(td TableData) []string
-	less   func(td TableData, i, j int) bool
 }
 
 // Source of truth for column order and content
-var tableColumns = []tableColumn{
+var vetTableColumns = []Column[VetTableData]{
 	{
 		"ID",
-		func(td TableData) []string { return itoaSlice(td.TrainedCharaIds) },
-		func(td TableData, i, j int) bool {
-			switch td.sortState {
+		func(td VetTableData) []string { return itoaSlice(td.TrainedCharaIds) },
+		func(td VetTableData, state SortState, i, j int) bool {
+			switch state {
 			case Ascending:
 				return td.TrainedCharaIds[i] < td.TrainedCharaIds[j]
 			case Descending:
@@ -69,9 +39,9 @@ var tableColumns = []tableColumn{
 	},
 	{
 		"Fielded",
-		func(td TableData) []string { return btoaSlice(td.Fielded) },
-		func(td TableData, i, j int) bool {
-			switch td.sortState {
+		func(td VetTableData) []string { return btoaSlice(td.Fielded) },
+		func(td VetTableData, state SortState, i, j int) bool {
+			switch state {
 			case Ascending:
 				return compareBool(td.Fielded[j], td.Fielded[i])
 			case Descending:
@@ -82,9 +52,9 @@ var tableColumns = []tableColumn{
 	},
 	{
 		"Name",
-		func(td TableData) []string { return td.Names },
-		func(td TableData, i, j int) bool {
-			switch td.sortState {
+		func(td VetTableData) []string { return td.Names },
+		func(td VetTableData, state SortState, i, j int) bool {
+			switch state {
 			case Ascending:
 				return td.Names[i] < td.Names[j]
 			case Descending:
@@ -95,9 +65,9 @@ var tableColumns = []tableColumn{
 	},
 	{
 		"Distance",
-		func(td TableData) []string { return td.Distances },
-		func(td TableData, i, j int) bool {
-			switch td.sortState {
+		func(td VetTableData) []string { return td.Distances },
+		func(td VetTableData, state SortState, i, j int) bool {
+			switch state {
 			case Ascending:
 				return td.DistanceTypes[i] < td.DistanceTypes[j]
 			case Descending:
@@ -108,9 +78,9 @@ var tableColumns = []tableColumn{
 	},
 	{
 		"Style",
-		func(td TableData) []string { return td.Styles },
-		func(td TableData, i, j int) bool {
-			switch td.sortState {
+		func(td VetTableData) []string { return td.Styles },
+		func(td VetTableData, state SortState, i, j int) bool {
+			switch state {
 			case Ascending:
 				return td.StyleTypes[i] < td.StyleTypes[j]
 			case Descending:
@@ -121,9 +91,9 @@ var tableColumns = []tableColumn{
 	},
 	{
 		"# Races",
-		func(td TableData) []string { return itoaSlice(td.NumRaces) },
-		func(td TableData, i, j int) bool {
-			switch td.sortState {
+		func(td VetTableData) []string { return itoaSlice(td.NumRaces) },
+		func(td VetTableData, state SortState, i, j int) bool {
+			switch state {
 			case Ascending:
 				return td.NumRaces[i] < td.NumRaces[j]
 			case Descending:
@@ -134,9 +104,9 @@ var tableColumns = []tableColumn{
 	},
 	{
 		"Max",
-		func(td TableData) []string { return itoaSlice(td.MaxScores) },
-		func(td TableData, i, j int) bool {
-			switch td.sortState {
+		func(td VetTableData) []string { return itoaSlice(td.MaxScores) },
+		func(td VetTableData, state SortState, i, j int) bool {
+			switch state {
 			case Ascending:
 				return td.MaxScores[i] < td.MaxScores[j]
 			case Descending:
@@ -147,9 +117,9 @@ var tableColumns = []tableColumn{
 	},
 	{
 		"Avg",
-		func(td TableData) []string { return itoaSlice(td.AvgScores) },
-		func(td TableData, i, j int) bool {
-			switch td.sortState {
+		func(td VetTableData) []string { return itoaSlice(td.AvgScores) },
+		func(td VetTableData, state SortState, i, j int) bool {
+			switch state {
 			case Ascending:
 				return td.AvgScores[i] < td.AvgScores[j]
 			case Descending:
@@ -160,9 +130,14 @@ var tableColumns = []tableColumn{
 	},
 }
 
-func NewTableData(dataStore TableMapper, summary TTUmaSummary) TableData {
+// NewVetTable builds the TT veteran table from a summary
+func NewVetTable(dataStore TableMapper, summary TTUmaSummary) *Table[VetTableData] {
+	return NewTable(newVetTableData(dataStore, summary), vetTableColumns)
+}
+
+func newVetTableData(dataStore TableMapper, summary TTUmaSummary) VetTableData {
 	n := summary.Len()
-	result := TableData{
+	result := VetTableData{
 		TrainedCharaIds: make([]int, 0, n),
 		Names:           make([]string, 0, n),
 		Distances:       make([]string, 0, n),
@@ -199,9 +174,9 @@ func NewTableData(dataStore TableMapper, summary TTUmaSummary) TableData {
 	return result
 }
 
-// Filter returns a new TableData containing only the rows at the given indices.
-func (td TableData) Filter(indices []int) TableData {
-	result := TableData{
+// Filter returns a new VetTableData containing only the rows at the given indices.
+func (td VetTableData) Filter(indices []int) VetTableData {
+	return VetTableData{
 		TrainedCharaIds: filterSlice(td.TrainedCharaIds, indices),
 		Names:           filterSlice(td.Names, indices),
 		Distances:       filterSlice(td.Distances, indices),
@@ -214,15 +189,14 @@ func (td TableData) Filter(indices []int) TableData {
 		Fielded:         filterSlice(td.Fielded, indices),
 		origIndexes:     filterSlice(td.origIndexes, indices),
 	}
-	return result
 }
 
-func (td TableData) Len() int {
+func (td VetTableData) Len() int {
 	return len(td.TrainedCharaIds)
 }
 
 // Swap exchanges rows i and j across all columns
-func (td TableData) Swap(i, j int) {
+func (td VetTableData) Swap(i, j int) {
 	swapSlice(td.TrainedCharaIds, i, j)
 	swapSlice(td.Names, i, j)
 	swapSlice(td.Distances, i, j)
@@ -236,102 +210,11 @@ func (td TableData) Swap(i, j int) {
 	swapSlice(td.origIndexes, i, j)
 }
 
-// Less compares the sortColumn's rows i and j
-//
-// Unsorted rows compare by their original indices to revert sorting
-func (td TableData) Less(i, j int) bool {
-	if td.sortState == Unsorted {
-		return td.origIndexes[i] < td.origIndexes[j]
-	}
-	return tableColumns[td.sortColumn].less(td, i, j)
-}
-
-// Sort reorders all rows in place by the given column
-//
-// Consecutive sorts on the same column cycle through ascending, descending, and the
-// original order
-func (td *TableData) Sort(col int) {
-	if col == td.sortColumn {
-		td.sortState = td.sortState.Next()
-	} else {
-		td.sortState = Ascending
-	}
-	td.sortColumn = col
-	sort.Sort(td)
-}
-
-// Header names for each column
-func (td TableData) Headers() []string {
-	headers := make([]string, len(tableColumns))
-	for i, col := range tableColumns {
-		headers[i] = col.header
-	}
-	return headers
-}
-
-// Columns returns the table contents in column-major order
-func (td TableData) Columns() [][]string {
-	cols := make([][]string, len(tableColumns))
-	for i, col := range tableColumns {
-		cols[i] = col.value(td)
-	}
-	return cols
-}
-
-// ColumnWidths returns the length of the longest string in a column
-// including headers
-func (td TableData) ColumnWidths() []int {
-	lengths := make([]int, len(tableColumns))
-	for i, col := range tableColumns {
-		lengths[i] = len(col.header)
-		for _, val := range col.value(td) {
-			if len(val) > lengths[i] {
-				lengths[i] = len(val)
-			}
-		}
-	}
-	return lengths
+func (td VetTableData) OrigIndex(row int) int {
+	return td.origIndexes[row]
 }
 
 // GetTrainedCharaId returns a single TrainedCharaId from a given row
-func (td TableData) GetTrainedCharaId(row int) int {
+func (td VetTableData) GetTrainedCharaId(row int) int {
 	return td.TrainedCharaIds[row]
-}
-
-// itoaSlice converts a slice of ints to a slice of strings
-func itoaSlice(a []int) []string {
-	result := make([]string, 0, len(a))
-	for _, i := range a {
-		result = append(result, strconv.Itoa(i))
-	}
-	return result
-}
-
-// btoaSlice converts a slice of bools to a slice of strings
-func btoaSlice(a []bool) []string {
-	result := make([]string, 0, len(a))
-	for _, i := range a {
-		result = append(result, strconv.FormatBool(i))
-	}
-	return result
-}
-
-func swapSlice[T any](s []T, i, j int) {
-	s[i], s[j] = s[j], s[i]
-}
-
-func filterSlice[T any](s []T, indices []int) []T {
-	result := make([]T, 0, len(indices))
-	for _, i := range indices {
-		if i < 0 || i >= len(s) {
-			continue
-		}
-		result = append(result, s[i])
-	}
-	return result
-}
-
-// compareBool reports whether x is greater than y, where true > false
-func compareBool(x, y bool) bool {
-	return x && !y
 }
