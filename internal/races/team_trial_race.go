@@ -22,10 +22,11 @@ func (ttrs *TeamTrialResultSet) append(ttr TeamTrialResult) {
 // so that the TTRS only need to be walked once
 type TTUmaSummary struct {
 	// TrainedCharaIds is also in CharaData, but it's simpler to have a slice
-	TrainedCharaIds []int
-	CharaData       []RaceHorseData
-	Scores          []ScoreArray
-	DistanceTypes   []DistanceType
+	TrainedCharaIds  []int
+	CharaData        []RaceHorseData
+	Scores           []ScoreArray
+	DistanceTypes    []DistanceType
+	SkillActivations []map[int]int
 	// FieldedCount counts the number of umas we are fielding on our team
 	FieldedCount int
 }
@@ -52,6 +53,16 @@ func (ttrs TeamTrialResultSet) Summarize() TTUmaSummary {
 			if newest {
 				s.FieldedCount += len(umas)
 			}
+
+			// Parse race scenario blob
+			scenario, _ := raceResult.DecodeScenario()
+			activations := scenario.SkillActivations()
+			// Skill IDs activated per uma in the race scenario
+			activationMap := make(map[int][]int, 12)
+			for _, activation := range activations {
+				activationMap[activation.HorseIndex] = append(activationMap[activation.HorseIndex], activation.SkillId)
+			}
+
 			// Add uma result to summary
 			for _, uma := range umas {
 				index, exists := rows[uma.TrainedCharaId]
@@ -62,9 +73,20 @@ func (ttrs TeamTrialResultSet) Summarize() TTUmaSummary {
 					s.CharaData = append(s.CharaData, uma)
 					s.Scores = append(s.Scores, ScoreArray{})
 					s.DistanceTypes = append(s.DistanceTypes, raceResult.DistanceType)
+					// Count skill activations per skill ID
+					activations := make(map[int]int)
+					skillIds := activationMap[uma.FrameOrder-1]
+					for _, skillId := range skillIds {
+						activations[skillId]++
+					}
+					s.SkillActivations = append(s.SkillActivations, activations)
 				}
 				if result := raceResult.FindCharaResults(uma.TrainedCharaId); len(result.ScoreEventArray) > 0 {
 					s.Scores[index].append(result.TotalScore())
+					skillIds := activationMap[uma.FrameOrder-1]
+					for _, skillId := range skillIds {
+						s.SkillActivations[index][skillId]++
+					}
 				}
 			}
 		}
