@@ -23,8 +23,17 @@ const (
 
 // TeamTrialsData holds everything the team trials page needs to render
 type TeamTrialsData struct {
-	Summary  races.TTUmaSummary
-	VetTable *races.Table[races.VetTableData]
+	Summary    races.TTUmaSummary
+	VetTable   *races.Table[races.VetTableData]
+	SkillTable *races.Table[races.SkillTableData]
+
+	// Data needed for SkillTable, todo refactor
+	// dataStore maps the skill IDs to skill names at each refresh
+	dataStore *data.DataStore
+	// skillCols holds the rendered skill table in column-major order
+	skillCols [][]string
+	// skillWidget shows skillCols. It's nil until the page is built
+	skillWidget *widget.Table
 }
 
 // LoadTeamTrialResults loads the saved team trial races from a hardcoded
@@ -38,14 +47,16 @@ func LoadTeamTrialResults() (races.TeamTrialResultSet, error) {
 	return races.LoadRacesFolder(filepath.Join(home, "Documents", "Saved races", "Team trials"))
 }
 
-// NewTeamTrialsData aggregates loaded races into the page's inputs. It reads
-// chara titles out of master.mdb, so it runs once both loads have finished -
-// still off the UI thread.
+// NewTeamTrialsData aggregates loaded races into the page's inputs
 func NewTeamTrialsData(dataStore *data.DataStore, resultSet races.TeamTrialResultSet) TeamTrialsData {
 	summary := resultSet.Summarize()
+	skillTable := races.NewSkillTable()
 	return TeamTrialsData{
-		Summary:  summary,
-		VetTable: races.NewVetTable(dataStore, summary),
+		Summary:    summary,
+		VetTable:   races.NewVetTable(dataStore, summary),
+		SkillTable: skillTable,
+		dataStore:  dataStore,
+		skillCols:  make([][]string, len(skillTable.Headers())),
 	}
 }
 
@@ -66,8 +77,27 @@ func NewTeamTrialsPage(ttData TeamTrialsData) *fyne.Container {
 	}
 	chart := newScoreHistogram(maxScore, maxFreq)
 
-	// Skill table
-	skillTable := container.NewWithoutLayout()
+	// Skill table. It stays empty until a vet table row is selected.
+	skillHeaders := ttData.SkillTable.Headers()
+	skillTable := newTable(skillHeaders, ttData.skillCols, ttData.SkillTable.ColumnWidths())
+	ttData.skillWidget = skillTable
+	// Sort on header click
+	skillTable.UpdateHeader = func(id widget.TableCellID, cell fyne.CanvasObject) {
+		b := cell.(*widget.Button)
+		// Set the button only when we need to
+		if b.Text != skillHeaders[id.Col] {
+			b.SetText(skillHeaders[id.Col])
+			b.OnTapped = func() {
+				skillTable.UnselectAll()
+				ttData.SkillTable.Sort(id.Col)
+				// A sort keeps the row count. Thus copy into the buffers.
+				for i, col := range ttData.SkillTable.Columns() {
+					copy(ttData.skillCols[i], col)
+				}
+				skillTable.Refresh()
+			}
+		}
+	}
 
 	// TT veteran table
 	vetTable := ttData.VetTable
@@ -78,6 +108,7 @@ func NewTeamTrialsPage(ttData TeamTrialsData) *fyne.Container {
 	table.OnSelected = func(id widget.TableCellID) {
 		i := vetTable.Data().GetTrainedCharaId(id.Row)
 		swapHistogram(chart, umaScoreData[i], float64(BAR_WIDTH)*BAR_WIDTH_MODIFIER)
+		ttData.RefreshSkillTable(i)
 	}
 	// Sort on header click
 	table.UpdateHeader = func(id widget.TableCellID, cell fyne.CanvasObject) {
@@ -95,6 +126,7 @@ func NewTeamTrialsPage(ttData TeamTrialsData) *fyne.Container {
 			}
 		}
 	}
+	table.Select(widget.TableCellID{Row: 0, Col: 0})
 	// Filter buttons for TT veteran table
 	filters := container.NewWithoutLayout()
 
@@ -106,6 +138,34 @@ func NewTeamTrialsPage(ttData TeamTrialsData) *fyne.Container {
 	split := container.NewHSplit(leftSide, rightSide)
 	split.SetOffset(0.7)
 	return container.NewStack(split)
+}
+
+// RefreshSkillTable fills the skill table with the skill data of the
+// uma with the given trained chara ID
+func (ttData TeamTrialsData) RefreshSkillTable(trainedCharaId int) {
+	i := slices.Index(ttData.Summary.TrainedCharaIds, trainedCharaId)
+	if i < 0 {
+		return
+	}
+	races.RefillSkillTable(
+		ttData.SkillTable,
+		ttData.dataStore,
+		ttData.Summary.SkillActivations[i],
+		ttData.Summary.Scores[i].Len(),
+	)
+
+	for c, col := range ttData.SkillTable.Columns() {
+		ttData.skillCols[c] = append(ttData.skillCols[c][:0], col...)
+	}
+	if ttData.skillWidget == nil {
+		return
+	}
+	ttData.skillWidget.UnselectAll()
+	for c, length := range ttData.SkillTable.ColumnWidths() {
+		ttData.skillWidget.SetColumnWidth(c, (float32(length)*7)+24)
+	}
+	ttData.skillWidget.ScrollToTop()
+	ttData.skillWidget.Refresh()
 }
 
 // Replaces a chart's point series with new ones
