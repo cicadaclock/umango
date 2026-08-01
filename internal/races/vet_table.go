@@ -1,6 +1,6 @@
 package races
 
-type TableMapper interface {
+type VetTableMapper interface {
 	// Maps veteran card ID to chara name
 	VeteranCardCharaTitle(ids []int) []string
 }
@@ -19,7 +19,7 @@ type VetTableData struct {
 	Fielded         []bool
 
 	// Original ordering that sorts by currently used umas
-	origIndexes []int
+	origIndices []int
 }
 
 // Source of truth for column order and content
@@ -131,11 +131,11 @@ var vetTableColumns = []Column[VetTableData]{
 }
 
 // NewVetTable builds the TT veteran table from a summary
-func NewVetTable(dataStore TableMapper, summary TTUmaSummary) *Table[VetTableData] {
+func NewVetTable(dataStore VetTableMapper, summary TTUmaSummary) *Table[VetTableData] {
 	return NewTable(newVetTableData(dataStore, summary), vetTableColumns)
 }
 
-func newVetTableData(dataStore TableMapper, summary TTUmaSummary) VetTableData {
+func newVetTableData(dataStore VetTableMapper, summary TTUmaSummary) VetTableData {
 	n := summary.Len()
 	result := VetTableData{
 		TrainedCharaIds: make([]int, 0, n),
@@ -148,7 +148,7 @@ func newVetTableData(dataStore TableMapper, summary TTUmaSummary) VetTableData {
 		MaxScores:       make([]int, 0, n),
 		AvgScores:       make([]int, 0, n),
 		Fielded:         make([]bool, 0, n),
-		origIndexes:     make([]int, 0, n),
+		origIndices:     make([]int, 0, n),
 	}
 
 	// Summary orders the current team first
@@ -169,7 +169,7 @@ func newVetTableData(dataStore TableMapper, summary TTUmaSummary) VetTableData {
 		result.MaxScores = append(result.MaxScores, scores.Max())
 		result.AvgScores = append(result.AvgScores, scores.Average())
 		result.Fielded = append(result.Fielded, i < summary.FieldedCount)
-		result.origIndexes = append(result.origIndexes, i)
+		result.origIndices = append(result.origIndices, i)
 	}
 	return result
 }
@@ -187,7 +187,7 @@ func (td VetTableData) Filter(indices []int) VetTableData {
 		MaxScores:       filterSlice(td.MaxScores, indices),
 		AvgScores:       filterSlice(td.AvgScores, indices),
 		Fielded:         filterSlice(td.Fielded, indices),
-		origIndexes:     filterSlice(td.origIndexes, indices),
+		origIndices:     filterSlice(td.origIndices, indices),
 	}
 }
 
@@ -207,11 +207,11 @@ func (td VetTableData) Swap(i, j int) {
 	swapSlice(td.MaxScores, i, j)
 	swapSlice(td.AvgScores, i, j)
 	swapSlice(td.Fielded, i, j)
-	swapSlice(td.origIndexes, i, j)
+	swapSlice(td.origIndices, i, j)
 }
 
 func (td VetTableData) OrigIndex(row int) int {
-	return td.origIndexes[row]
+	return td.origIndices[row]
 }
 
 // GetTrainedCharaId returns a single TrainedCharaId from a given row

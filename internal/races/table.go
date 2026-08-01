@@ -137,6 +137,15 @@ func itoaSlice(a []int) []string {
 	return result
 }
 
+// ftoaSlice converts a slice of floats to a slice of strings
+func ftoaSlice(a []float32) []string {
+	result := make([]string, 0, len(a))
+	for _, i := range a {
+		result = append(result, strconv.FormatFloat(float64(i), 'f', 2, 32))
+	}
+	return result
+}
+
 // btoaSlice converts a slice of bools to a slice of strings
 func btoaSlice(a []bool) []string {
 	result := make([]string, 0, len(a))
