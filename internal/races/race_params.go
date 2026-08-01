@@ -26,7 +26,7 @@ type RaceHorseData struct {
 	CardId      int `json:"card_id"`
 	TalentLevel int `json:"talent_level"`
 	// Starting gate
-	FrameOrder int             `json:"frame_order"`
+	FrameOrder int             `json:"frame_order"` // ID in the race scenario blob
 	SkillArray []veteran.Skill `json:"skill_array"`
 	// Stats
 	Stamina     int `json:"stamina"`

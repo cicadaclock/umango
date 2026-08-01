@@ -4,6 +4,8 @@ package races
 type RaceResult struct {
 	DistanceType DistanceType `json:"distance_type"`
 	// Base64-encoded compressed race scenario blob
+	//
+	// Format is base64 -> gzip -> little-endian binary
 	RaceScenario   string `json:"race_scenario"`
 	Round          int    `json:"round"`
 	TeamTotalScore int    `json:"team_total_score"`
@@ -17,7 +19,7 @@ type RaceResult struct {
 // Result of a single uma in a team trial round
 type CharaResult struct {
 	// Starting gate
-	FrameOrder     int `json:"frame_order"`
+	FrameOrder     int `json:"frame_order"` // ID in the race scenario blob
 	TrainedCharaId int `json:"trained_chara_id"`
 	TeamId         int `json:"team_id"`
 	// Placing in race
@@ -87,4 +89,9 @@ func (charaResult CharaResult) BonusScore() int {
 		}
 	}
 	return sum
+}
+
+// Decodes the RaceScenario blob of this race
+func (raceResult RaceResult) DecodeScenario() (RaceScenario, error) {
+	return DecodeRaceScenario(raceResult.RaceScenario)
 }
