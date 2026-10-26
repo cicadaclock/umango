@@ -9,8 +9,8 @@ temp/
 
 # Written by assets/extract_assets.py
 assets/.extractor/
-assets/character_icons/*
-!assets/character_icons/.gitkeep
+assets/icons/*
+!assets/icons/.gitkeep
 
 # Builds
 umango.exe

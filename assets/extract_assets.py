@@ -6,11 +6,17 @@
 #     "UnityPy==1.25.4",
 # ]
 # ///
-"""Extract the character icons from the local Umamusume: Pretty Derby install into assets/.
+"""Extract character and UI icons from the local Umamusume: Pretty Derby install into assets/.
 
 Downloads UmaExporter at a pinned commit and uses its meta database reader and asset bundle
-decryptor; UnityPy decodes the textures. Each icon is written to assets/character_icons as
-<chara_id>.png, downscaled to fit ICON_SIZE pixels, for main.go to embed into the executable.
+decryptor; UnityPy decodes the textures. Icons are written to assets/icons as
+<kind>/<name>.png, downscaled to at most ICON_HEIGHT pixels tall, for main.go to embed:
+
+- character/<chara_id>.png
+- stat/{speed,stamina,power,guts,wit}.png
+- running_style/{front,pace,late,end}.png
+- motivation/{awful,bad,normal,good,great}.png
+- distance_type/{sprint,mile,medium,long,dirt}.png
 
 Close the game first, then run from any directory:
 
@@ -33,11 +39,37 @@ EXTRACTOR_COMMIT = "027ed178120b6a21f2bb43970b82e89d2f4ffc36"  # UmaExporter v0.
 EXTRACTOR_SHA256 = "8686e3c63e7a33c804b2b3d3814dc05fe8c426f8fc57be9cde814b188bc37c43"
 EXTRACTOR_URL = f"https://codeload.github.com/mumu-lhl/UmaExporter/zip/{EXTRACTOR_COMMIT}"
 REGION = "global"
-ICON_SIZE = 64
+ICON_HEIGHT = 64
 
 ASSETS_DIR = Path(__file__).resolve().parent
-ICON_DIR = ASSETS_DIR / "character_icons"
+ICON_DIR = ASSETS_DIR / "icons"
 EXTRACTOR_DIR = ASSETS_DIR / ".extractor"
+
+COMMON_ATLAS = "atlas/common/common_tex"
+COMMON_ATLAS_SPRITES = {
+    "utx_ico_charastatus_00": "stat/speed.png",
+    "utx_ico_charastatus_01": "stat/stamina.png",
+    "utx_ico_charastatus_02": "stat/power.png",
+    "utx_ico_charastatus_03": "stat/guts.png",
+    "utx_ico_charastatus_04": "stat/wit.png",
+    "utx_txt_runstyle_00": "running_style/front.png",
+    "utx_txt_runstyle_01": "running_style/pace.png",
+    "utx_txt_runstyle_02": "running_style/late.png",
+    "utx_txt_runstyle_03": "running_style/end.png",
+    "utx_ico_motivation_m_00": "motivation/awful.png",
+    "utx_ico_motivation_m_01": "motivation/bad.png",
+    "utx_ico_motivation_m_02": "motivation/normal.png",
+    "utx_ico_motivation_m_03": "motivation/good.png",
+    "utx_ico_motivation_m_04": "motivation/great.png",
+}
+# Racing shoe items by distance type; each item bundle holds one Texture2D of the same name
+DISTANCE_TYPE_SHOE_ITEMS = {
+    "sprint": "item_icon_00001",
+    "mile": "item_icon_00004",
+    "medium": "item_icon_00007",
+    "long": "item_icon_00010",
+    "dirt": "item_icon_00013",
+}
 
 
 def default_game_data() -> Path:
@@ -82,16 +114,18 @@ def fetch_extractor() -> Path:
 
 
 def extract_icons(extractor_root: Path, game_data: Path) -> int:
-    """Write every character icon listed in the game's meta database to ICON_DIR.
+    """Write the character icons, COMMON_ATLAS_SPRITES and the distance type shoes to ICON_DIR.
 
     Inputs:
     - extractor_root: Folder holding UmaExporter's src package, from fetch_extractor
     - game_data: Folder holding meta, master/master.mdb and dat/
 
     Returns:
-    - failures: Number of icons that could not be written; each is reported on stderr
+    - failures: Number of asset bundles whose icons could not all be written; each is reported
+      on stderr
 
     Raises:
+    - LookupError: The meta database lists no COMMON_ATLAS or no racing shoe item
     - ValueError: UmaExporter could not decrypt the meta database
     """
     sys.path.insert(0, str(extractor_root))
@@ -104,51 +138,77 @@ def extract_icons(extractor_root: Path, game_data: Path) -> int:
     Config.set_base_path(str(game_data))
     database = UmaDatabase()
     try:
-        entries = database.get_character_entries()
+        # Each job is a meta database row, its object type, and its object names to PNG paths
+        jobs = [
+            (entry, "Texture2D", {entry["texture_name"]: f"character/{entry['chara_id']}.png"})
+            for entry in database.get_character_entries()
+        ]
+        named_jobs = [(COMMON_ATLAS, "Sprite", COMMON_ATLAS_SPRITES)] + [
+            (f"item/{item}", "Texture2D", {item: f"distance_type/{name}.png"})
+            for name, item in DISTANCE_TYPE_SHOE_ITEMS.items()
+        ]
+        for asset_path, object_type, outputs in named_jobs:
+            asset = database.get_asset_by_path(asset_path)
+            if asset is None:
+                raise LookupError(f"meta database lists no {asset_path}")
+            jobs.append((asset, object_type, outputs))
     finally:
         database.close()
 
-    ICON_DIR.mkdir(exist_ok=True)
     bundle_root = Path(Config.get_data_root())
-    failures = 0
-    for entry in entries:
-        bundle_hash = entry["hash"]
+    written = failures = 0
+    for asset, object_type, outputs in jobs:
+        bundle_hash = asset["hash"]
         try:
-            key = DEFAULT_KEY if entry["key"] is None else int(entry["key"])
+            key = DEFAULT_KEY if asset["key"] is None else int(asset["key"])
             bundle = bytearray((bundle_root / bundle_hash[:2] / bundle_hash).read_bytes())
             # Global encrypts meta with its own key but its bundles with the default base keys
             bundle = decrypt_bundle(bundle, REGION, key, DEFAULT_BASE_KEYS)
-            write_icon(bytes(bundle), entry["texture_name"], ICON_DIR / f"{entry['chara_id']}.png")
+            written += write_icons(bytes(bundle), object_type, outputs)
         except (OSError, LookupError, ValueError) as err:
             failures += 1
-            print(f"extracting {entry['full_path']} ({bundle_hash}): {err}", file=sys.stderr)
-    print(f"Wrote {len(entries) - failures} of {len(entries)} icons to {ICON_DIR}")
+            print(f"extracting {asset['full_path']} ({bundle_hash}): {err}", file=sys.stderr)
+    print(f"Wrote {written} icons to {ICON_DIR}")
     return failures
 
 
-def write_icon(bundle: bytes, texture_name: str, path: Path) -> None:
-    """Decode the named texture from a decrypted asset bundle and save it as a downscaled PNG.
+def write_icons(bundle: bytes, object_type: str, outputs: dict[str, str]) -> int:
+    """Save the named textures or sprites of a decrypted asset bundle as downscaled PNGs.
 
     Inputs:
     - bundle: Decrypted UnityFS asset bundle
-    - texture_name: m_Name of the Texture2D to export
-    - path: Destination PNG file, overwritten if present
+    - object_type: Unity class of the objects to export, "Texture2D" or "Sprite"
+    - outputs: m_Name of each object to export, mapped to its PNG path relative to ICON_DIR;
+      existing files are overwritten
+
+    Returns:
+    - written: Number of PNGs written, len(outputs)
 
     Raises:
-    - LookupError: The bundle holds no Texture2D named texture_name
-    - OSError: The PNG could not be written
+    - LookupError: The bundle lacks some of the named objects; the others are still written
+    - OSError: A PNG could not be written
     """
+    pending = dict(outputs)
     for obj in UnityPy.load(bundle).objects:
-        if obj.type.name != "Texture2D":
+        if obj.type.name != object_type:
             continue
-        texture = obj.read()
-        if texture.m_Name != texture_name:
+        path = pending.pop(obj.peek_name(), None)
+        if path is None:
             continue
-        icon = texture.image
-        icon.thumbnail((ICON_SIZE, ICON_SIZE), Image.Resampling.LANCZOS)
-        icon.save(path, optimize=True)
-        return
-    raise LookupError(f"no Texture2D named {texture_name}")
+        image_object = obj.read()
+        icon = image_object.image
+        if object_type == "Sprite":
+            # Tightly packed sprites decode trimmed; restore the full frame so icons align
+            rect, offset = image_object.m_Rect, image_object.m_RD.textureRectOffset
+            frame = Image.new("RGBA", (round(rect.width), round(rect.height)))
+            frame.paste(icon, (round(offset.x), round(rect.height - offset.y) - icon.height))
+            icon = frame
+        icon.thumbnail((icon.width, ICON_HEIGHT), Image.Resampling.LANCZOS)
+        (ICON_DIR / path).parent.mkdir(parents=True, exist_ok=True)
+        icon.save(ICON_DIR / path, optimize=True)
+    if pending:
+        raise LookupError(f"no {object_type} named {', '.join(pending)}")
+    return len(outputs)
 
 
 def main() -> int:
