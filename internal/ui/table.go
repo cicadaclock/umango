@@ -103,7 +103,7 @@ func clicked(gtx layout.Context, click *gesture.Click) bool {
 func (tv *tableView) layout(gtx layout.Context, theme *material.Theme) layout.Dimensions {
 	metric := gtx.Metric
 	rowHeight := gtx.Dp(tableRowHeight)
-	return component.Table(theme, &tv.grid).Layout(gtx, tv.rowCount(), len(tv.headers),
+	dims := component.Table(theme, &tv.grid).Layout(gtx, tv.rowCount(), len(tv.headers),
 		func(axis layout.Axis, index, _ int) int {
 			if axis == layout.Horizontal {
 				return metric.Dp(tv.widths[index])
@@ -133,6 +133,9 @@ func (tv *tableView) layout(gtx layout.Context, theme *material.Theme) layout.Di
 			return layout.Dimensions{Size: size}
 		},
 	)
+	// component.Table draws the vertical scrollbar past the width it reports
+	dims.Size.X = gtx.Constraints.Max.X
+	return dims
 }
 
 // layoutCellText draws s on one line, inset from the left edge and centered vertically in the
