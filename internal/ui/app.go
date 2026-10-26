@@ -60,7 +60,7 @@ var (
 // fatally when the window fails.
 //
 // Inputs:
-// - assets: Embedded file system holding the Inter font
+// - assets: Embedded file system holding the Inter font and the extracted character icons
 //
 // Returns:
 // - err: Failure reading or parsing the font, before the window opens

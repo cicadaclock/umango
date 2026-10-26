@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	//go:embed assets/*
+	//go:embed assets/font all:assets/character_icons
 	assets embed.FS
 )
 
