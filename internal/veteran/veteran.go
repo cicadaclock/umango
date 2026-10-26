@@ -4,7 +4,7 @@ package veteran
 import (
 	"encoding/json"
 	"fmt"
-	"os"
+	"io"
 
 	"github.com/ichiban/soa"
 )
@@ -59,31 +59,22 @@ type SuccessionChara struct {
 	PositionId int `json:"position_id"`
 }
 
-func Init(path string) (*VeteranSlice, error) {
-	if path == "" {
-		return nil, fmt.Errorf("empty path")
-	}
-
-	veterans, err := loadVeterans(path)
-	if err != nil {
-		return nil, fmt.Errorf("load veteran list: %w", err)
+// Decode reads a veterans.json document into a VeteranSlice.
+//
+// Inputs:
+// - r: Reader positioned at a JSON array of veterans
+//
+// Returns:
+// - veterans: Decoded veterans, garbage collected and owned by the caller
+// - err: JSON decoding failure
+func Decode(r io.Reader) (*VeteranSlice, error) {
+	var veterans []Veteran
+	if err := json.NewDecoder(r).Decode(&veterans); err != nil {
+		return nil, fmt.Errorf("decode veteran list: %w", err)
 	}
 	veteranSlice := soa.Make[VeteranSlice](0, len(veterans))
 	for _, veteran := range veterans {
 		veteranSlice = soa.Append(veteranSlice, veteran)
 	}
 	return &veteranSlice, nil
-}
-
-func loadVeterans(path string) ([]Veteran, error) {
-	file, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("read file %s: %w", path, err)
-	}
-	var veteranList []Veteran
-	err = json.Unmarshal(file, &veteranList)
-	if err != nil {
-		return nil, fmt.Errorf("unmarshal: %w", err)
-	}
-	return veteranList, nil
 }

@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 )
 
 const (
@@ -33,7 +33,7 @@ func Open() (*DB, error) {
 	// master.mdb is static data, open it read-only immutable to skip locking
 	// and journal checks
 	dsn := "file:" + filepath.ToSlash(dbPath) + "?mode=ro&immutable=1"
-	sqlDb, err := sql.Open("sqlite3", dsn)
+	sqlDb, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("opening master.mdb at %s: %w", dbPath, err)
 	}
