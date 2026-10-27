@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"io/fs"
 	"log"
 	"os"
 
@@ -48,6 +49,7 @@ var (
 	colorPrimary    = color.NRGBA{R: 0x29, G: 0x6f, B: 0xf6, A: 0xff}
 	colorOnPrimary  = color.NRGBA{R: 0xff, G: 0xff, B: 0xff, A: 0xff}
 	colorSelection  = color.NRGBA{R: 0x29, G: 0x6f, B: 0xf6, A: 0x40}
+	colorHover      = color.NRGBA{R: 0x29, G: 0x6f, B: 0xf6, A: 0x1a}
 	colorHeader     = color.NRGBA{R: 0xf5, G: 0xf5, B: 0xf5, A: 0xff}
 	colorSeparator  = color.NRGBA{R: 0xe3, G: 0xe3, B: 0xe3, A: 0xff}
 	colorDivider    = color.NRGBA{R: 0xc4, G: 0xc4, B: 0xc4, A: 0xff}
@@ -77,7 +79,7 @@ func App(assets embed.FS) error {
 		return err
 	}
 	go func() {
-		if err := run(fontData, shaper); err != nil {
+		if err := run(assets, fontData, shaper); err != nil {
 			log.Fatalf("run window: %v", err)
 		}
 		os.Exit(0)
@@ -135,20 +137,23 @@ type loadResult struct {
 	err        error
 }
 
-// load reads master.mdb and the saved races concurrently and aggregates them into the TT page
-func load(fontData []byte) loadResult {
+// load reads master.mdb, the saved races and the distance type icons concurrently and
+// aggregates them into the TT page
+func load(assets fs.FS, fontData []byte) loadResult {
 	var (
-		result    loadResult
-		resultSet races.TeamTrialResultSet
+		result        loadResult
+		resultSet     races.TeamTrialResultSet
+		distanceIcons distanceTypeIcons
 	)
 	var g errgroup.Group
 	g.Go(func() (err error) { result.shaper, err = newShaper(fontData, true); return })
 	g.Go(func() (err error) { result.dataStore, err = data.Init(); return })
 	g.Go(func() (err error) { resultSet, err = loadTeamTrialResults(); return })
+	g.Go(func() (err error) { distanceIcons, err = loadDistanceTypeIcons(assets); return })
 	if err := g.Wait(); err != nil {
 		return loadResult{err: err}
 	}
-	result.teamTrials = newTeamTrialsPage(result.dataStore, resultSet)
+	result.teamTrials = newTeamTrialsPage(result.dataStore, resultSet, distanceIcons)
 	return result
 }
 
@@ -165,7 +170,7 @@ type screen struct {
 }
 
 // run drives the window event loop until the window closes
-func run(fontData []byte, shaper *text.Shaper) error {
+func run(assets fs.FS, fontData []byte, shaper *text.Shaper) error {
 	var window app.Window
 	window.Option(app.Title("Umango"), app.Size(windowWidth, windowHeight))
 
@@ -182,7 +187,7 @@ func run(fontData []byte, shaper *text.Shaper) error {
 
 	loads := make(chan loadResult, 1)
 	go func() {
-		loads <- load(fontData)
+		loads <- load(assets, fontData)
 		window.Invalidate()
 	}()
 
