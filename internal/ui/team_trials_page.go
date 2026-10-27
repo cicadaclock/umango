@@ -65,6 +65,7 @@ func newTeamTrialsPage(dataStore *data.DataStore, resultSet races.TeamTrialResul
 	}
 	p.vetView = newTableView(p.vetTable.Headers(), true)
 	p.vetView.setColumns(p.vetTable.Columns(), p.vetTable.ColumnWidths())
+	p.vetView.layoutCell = p.layoutVetCell
 	p.skillView = newTableView(p.skillTable.Headers(), false)
 	p.skillView.setColumns(p.skillTable.Columns(), p.skillTable.ColumnWidths())
 	if p.vetTable.Len() > 0 {
@@ -86,6 +87,21 @@ func (p *teamTrialsPage) selectRow(row int) {
 	)
 	p.skillView.setColumns(p.skillTable.Columns(), p.skillTable.ColumnWidths())
 	p.skillView.scrollToTop()
+}
+
+// layoutVetCell draws the running style icon in place of the vet table's style text
+func (p *teamTrialsPage) layoutVetCell(
+	gtx layout.Context,
+	theme *material.Theme,
+	row, col int,
+) bool {
+	if col != races.VetStyleColumn {
+		return false
+	}
+	gtx, offset := iconCell(gtx)
+	layoutRunningStyleIcon(gtx, theme, p.vetTable.Data().StyleTypes[row])
+	offset.Pop()
+	return true
 }
 
 func (p *teamTrialsPage) update(gtx layout.Context) {

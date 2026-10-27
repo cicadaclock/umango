@@ -22,6 +22,9 @@ type VetTableData struct {
 	origIndices []int
 }
 
+// VetStyleColumn is the index of the "Style" column in vetTableColumns
+const VetStyleColumn = 4
+
 // Source of truth for column order and content
 var vetTableColumns = []Column[VetTableData]{
 	{

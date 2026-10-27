@@ -23,11 +23,14 @@ import (
 	"gioui.org/x/explorer"
 	"github.com/cicadaclock/umango/internal/data"
 	"github.com/cicadaclock/umango/internal/races"
+	fontapi "github.com/go-text/typesetting/font"
+	ot "github.com/go-text/typesetting/font/opentype"
 	"golang.org/x/sync/errgroup"
 )
 
 const (
 	fontPath                      = "assets/font/Inter-VariableFont_opsz,wght.ttf"
+	interExtraBoldWeight          = 800
 	windowWidth, windowHeight     = unit.Dp(1280), unit.Dp(720)
 	textSize                      = unit.Sp(14)
 	tabPadding                    = unit.Dp(10)
@@ -69,8 +72,6 @@ func App(assets embed.FS) error {
 	if err != nil {
 		return fmt.Errorf("read assets: %w", err)
 	}
-	// System font fallback costs tens of milliseconds, so the first frames use Inter alone
-	// and the loader builds the full shaper in the background.
 	shaper, err := newShaper(fontData, false)
 	if err != nil {
 		return err
@@ -85,18 +86,45 @@ func App(assets embed.FS) error {
 	return nil
 }
 
-// newShaper parses fontData into a text shaper, optionally falling back to the system fonts for
-// glyphs the font lacks
-func newShaper(fontData []byte, systemFonts bool) (*text.Shaper, error) {
-	face, err := opentype.Parse(fontData)
+// newShaper parses fontData, the Inter variable font, into a text shaper
+//
+// The full shaper adds an extra bold instance of Inter and falls back to the system fonts for
+// glyphs Inter lacks. Each costs milliseconds, so the first frames use a regular-only shaper
+// while the loader builds the full one in the background.
+func newShaper(fontData []byte, full bool) (*text.Shaper, error) {
+	regular, err := opentype.Parse(fontData)
 	if err != nil {
 		return nil, fmt.Errorf("parse font: %w", err)
 	}
-	options := []text.ShaperOption{text.WithCollection([]font.FontFace{{Font: face.Font(), Face: face}})}
-	if !systemFonts {
-		options = append(options, text.NoSystemFonts())
+	faces := []font.FontFace{{Font: regular.Font(), Face: regular}}
+	if !full {
+		return text.NewShaper(text.NoSystemFonts(), text.WithCollection(faces)), nil
 	}
-	return text.NewShaper(options...), nil
+	// Gio identifies faces by their parsed font, so the bold instance needs its own parse
+	bold, err := opentype.Parse(fontData)
+	if err != nil {
+		return nil, fmt.Errorf("parse font: %w", err)
+	}
+	boldFont := bold.Font()
+	boldFont.Weight = font.ExtraBold
+	boldFace := variedFace{face: bold, variations: []fontapi.Variation{
+		{Tag: ot.MustNewTag("wght"), Value: interExtraBoldWeight},
+	}}
+	faces = append(faces, font.FontFace{Font: boldFont, Face: boldFace})
+	return text.NewShaper(text.WithCollection(faces)), nil
+}
+
+// variedFace serves a variable font at fixed variation axis values
+type variedFace struct {
+	face       opentype.Face
+	variations []fontapi.Variation
+}
+
+// Face returns a face of the font at the variation axis values, for use by a single goroutine
+func (f variedFace) Face() *fontapi.Face {
+	face := f.face.Face()
+	face.SetVariations(f.variations)
+	return face
 }
 
 // loadResult carries the background load into the window goroutine

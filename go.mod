@@ -5,6 +5,7 @@ go 1.26.0
 require (
 	gioui.org v0.10.3
 	gioui.org/x v0.10.3
+	github.com/go-text/typesetting v0.3.5
 	github.com/ichiban/soa v0.1.2
 	golang.org/x/sync v0.23.0
 	modernc.org/sqlite v1.60.1
@@ -15,7 +16,6 @@ require (
 	git.wow.st/gmp/jni v0.0.0-20210610011705-34026c7e22d0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
-	github.com/go-text/typesetting v0.3.5 // indirect
 	github.com/godbus/dbus/v5 v5.2.2 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect

@@ -4,7 +4,7 @@ This is an UM:PD Team Trial analysis tool designed to read your team trials race
 
 ## Game icons
 
-Character, stat, running style, mood and distance type icons are extracted from your local game install and embedded into the executable at build time; they are not part of the repository. Close the game, then run this once, and again after new characters are released:
+Character, stat, mood and distance type icons are extracted from your local game install and embedded into the executable at build time; they are not part of the repository. Close the game, then run this once, and again after new characters are released:
 
 ```sh
 uv run assets/extract_assets.py

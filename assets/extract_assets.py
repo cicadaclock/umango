@@ -14,7 +14,6 @@ decryptor; UnityPy decodes the textures. Icons are written to assets/icons as
 
 - character/<chara_id>.png
 - stat/{speed,stamina,power,guts,wit}.png
-- running_style/{front,pace,late,end}.png
 - motivation/{awful,bad,normal,good,great}.png
 - distance_type/{sprint,mile,medium,long,dirt}.png
 
@@ -52,10 +51,6 @@ COMMON_ATLAS_SPRITES = {
     "utx_ico_charastatus_02": "stat/power.png",
     "utx_ico_charastatus_03": "stat/guts.png",
     "utx_ico_charastatus_04": "stat/wit.png",
-    "utx_txt_runstyle_00": "running_style/front.png",
-    "utx_txt_runstyle_01": "running_style/pace.png",
-    "utx_txt_runstyle_02": "running_style/late.png",
-    "utx_txt_runstyle_03": "running_style/end.png",
     "utx_ico_motivation_m_00": "motivation/awful.png",
     "utx_ico_motivation_m_01": "motivation/bad.png",
     "utx_ico_motivation_m_02": "motivation/normal.png",

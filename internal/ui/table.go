@@ -17,6 +17,7 @@ import (
 const (
 	tableRowHeight   = unit.Dp(32)
 	tableCellPadding = unit.Dp(8)
+	tableIconSize    = unit.Dp(28)
 	// Column width per character of the longest cell, plus fixed padding
 	tableCharWidth    = 8
 	tableColumnMargin = 24
@@ -35,6 +36,8 @@ type tableView struct {
 	rowClicks    []gesture.Click
 	selectable   bool
 	selectedRow  int
+	// layoutCell, when set, may draw a body cell in place of its text, reporting whether it did
+	layoutCell func(gtx layout.Context, theme *material.Theme, row, col int) bool
 }
 
 func newTableView(headers []string, selectable bool) tableView {
@@ -129,6 +132,9 @@ func (tv *tableView) layout(gtx layout.Context, theme *material.Theme) layout.Di
 				tv.rowClicks[row].Add(gtx.Ops)
 				pointer.CursorPointer.Add(gtx.Ops)
 			}
+			if tv.layoutCell != nil && tv.layoutCell(gtx, theme, row, col) {
+				return layout.Dimensions{Size: size}
+			}
 			layoutCellText(gtx, theme, tv.columns[col][row])
 			return layout.Dimensions{Size: size}
 		},
@@ -153,4 +159,14 @@ func layoutCellText(gtx layout.Context, theme *material.Theme, s string) {
 	call := macro.Stop()
 	defer op.Offset(image.Pt(padding, (cellHeight-dims.Size.Y)/2)).Push(gtx.Ops).Pop()
 	call.Add(gtx.Ops)
+}
+
+// iconCell narrows the cell given by gtx's exact constraints to a tableIconSize square, inset
+// from the left edge and centered vertically; the caller pops the returned offset after drawing
+func iconCell(gtx layout.Context) (layout.Context, op.TransformStack) {
+	side := gtx.Dp(tableIconSize)
+	offset := image.Pt(gtx.Dp(tableCellPadding), (gtx.Constraints.Max.Y-side)/2)
+	stack := op.Offset(offset).Push(gtx.Ops)
+	gtx.Constraints = layout.Exact(image.Pt(side, side))
+	return gtx, stack
 }
