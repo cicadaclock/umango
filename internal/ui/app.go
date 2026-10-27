@@ -11,8 +11,10 @@ import (
 	"os"
 
 	"gioui.org/app"
+	"gioui.org/f32"
 	"gioui.org/font"
 	"gioui.org/font/opentype"
+	"gioui.org/io/pointer"
 	"gioui.org/layout"
 	"gioui.org/op"
 	"gioui.org/op/clip"
@@ -30,32 +32,37 @@ import (
 )
 
 const (
-	fontPath                      = "assets/font/Inter-VariableFont_opsz,wght.ttf"
-	interExtraBoldWeight          = 800
-	windowWidth, windowHeight     = unit.Dp(1280), unit.Dp(720)
-	textSize                      = unit.Sp(14)
+	fontPath                        = "assets/font/Inter-VariableFont_opsz,wght.ttf"
+	windowWidth, windowHeight       = unit.Dp(1280), unit.Dp(720)
+	minWindowWidth, minWindowHeight = unit.Dp(960), unit.Dp(600)
+	topBarHeight                    = unit.Dp(40)
+	wordmarkSize                    = unit.Sp(16)
+	wordmarkText                    = "UMANGO"
+	// Space between the wordmark and the first page tab
+	wordmarkGap                   = unit.Dp(18)
 	tabPadding                    = unit.Dp(10)
 	tabIndicatorHeight            = unit.Dp(2)
-	loadingIndicatorSize          = unit.Dp(32)
+	loadingIndicatorSize          = unit.Dp(28)
+	loadingTextGap                = unit.Dp(14)
 	tabTeamTrials, tabVeteranList = 0, 1
 	tabCount                      = 2
-	loadingText                   = "Loading master.mdb and saved races..."
+	loadingText                   = "Loading master.mdb and saved races…"
 	loadingErrorPrefix            = "Failed to load master.mdb:\n"
 )
 
 var (
-	colorBackground = color.NRGBA{R: 0xdd, G: 0xdd, B: 0xdd, A: 0xff}
-	colorForeground = color.NRGBA{R: 0x56, G: 0x56, B: 0x56, A: 0xff}
-	colorPrimary    = color.NRGBA{R: 0x29, G: 0x6f, B: 0xf6, A: 0xff}
-	colorOnPrimary  = color.NRGBA{R: 0xff, G: 0xff, B: 0xff, A: 0xff}
-	colorSelection  = color.NRGBA{R: 0x29, G: 0x6f, B: 0xf6, A: 0x40}
-	colorHover      = color.NRGBA{R: 0x29, G: 0x6f, B: 0xf6, A: 0x1a}
-	colorHeader     = color.NRGBA{R: 0xf5, G: 0xf5, B: 0xf5, A: 0xff}
-	colorSeparator  = color.NRGBA{R: 0xe3, G: 0xe3, B: 0xe3, A: 0xff}
-	colorDivider    = color.NRGBA{R: 0xc4, G: 0xc4, B: 0xc4, A: 0xff}
-	colorError      = color.NRGBA{R: 0xf4, G: 0x43, B: 0x36, A: 0xff}
-
 	tabTitles = [tabCount]string{tabTeamTrials: "TT Chart", tabVeteranList: "Veteran List"}
+
+	// Weight instances of the Inter variable font that the full shaper adds to the regular face
+	interInstances = [...]struct {
+		weight font.Weight
+		wght   float32
+	}{
+		{font.SemiBold, 600},
+		{font.ExtraBold, 800},
+	}
+	// The wordmark's gradient runs from this amber into the accent
+	colorWordmarkStart = rgb(0xffa630)
 )
 
 // App opens the Umango window and loads master.mdb and the saved races in the background.
@@ -90,9 +97,9 @@ func App(assets embed.FS) error {
 
 // newShaper parses fontData, the Inter variable font, into a text shaper
 //
-// The full shaper adds an extra bold instance of Inter and falls back to the system fonts for
-// glyphs Inter lacks. Each costs milliseconds, so the first frames use a regular-only shaper
-// while the loader builds the full one in the background.
+// The full shaper adds semibold and extra bold instances of Inter and falls back to the system
+// fonts for glyphs Inter lacks. Each costs milliseconds, so the first frames use a regular-only
+// shaper while the loader builds the full one in the background.
 func newShaper(fontData []byte, full bool) (*text.Shaper, error) {
 	regular, err := opentype.Parse(fontData)
 	if err != nil {
@@ -102,17 +109,19 @@ func newShaper(fontData []byte, full bool) (*text.Shaper, error) {
 	if !full {
 		return text.NewShaper(text.NoSystemFonts(), text.WithCollection(faces)), nil
 	}
-	// Gio identifies faces by their parsed font, so the bold instance needs its own parse
-	bold, err := opentype.Parse(fontData)
-	if err != nil {
-		return nil, fmt.Errorf("parse font: %w", err)
+	for _, instance := range interInstances {
+		// Gio identifies faces by their parsed font, so each instance needs its own parse
+		face, err := opentype.Parse(fontData)
+		if err != nil {
+			return nil, fmt.Errorf("parse font: %w", err)
+		}
+		instanceFont := face.Font()
+		instanceFont.Weight = instance.weight
+		faces = append(faces, font.FontFace{Font: instanceFont, Face: variedFace{
+			face:       face,
+			variations: []fontapi.Variation{{Tag: ot.MustNewTag("wght"), Value: instance.wght}},
+		}})
 	}
-	boldFont := bold.Font()
-	boldFont.Weight = font.ExtraBold
-	boldFace := variedFace{face: bold, variations: []fontapi.Variation{
-		{Tag: ot.MustNewTag("wght"), Value: interExtraBoldWeight},
-	}}
-	faces = append(faces, font.FontFace{Font: boldFont, Face: boldFace})
 	return text.NewShaper(text.WithCollection(faces)), nil
 }
 
@@ -172,18 +181,12 @@ type screen struct {
 // run drives the window event loop until the window closes
 func run(assets fs.FS, fontData []byte, shaper *text.Shaper) error {
 	var window app.Window
-	window.Option(app.Title("Umango"), app.Size(windowWidth, windowHeight))
-
-	theme := material.NewTheme()
-	theme.Shaper = shaper
-	theme.TextSize = textSize
-	theme.Palette = material.Palette{
-		Bg:         colorBackground,
-		Fg:         colorForeground,
-		ContrastBg: colorPrimary,
-		ContrastFg: colorOnPrimary,
-	}
-	s := screen{theme: theme, window: &window, explorer: explorer.NewExplorer(&window)}
+	window.Option(
+		app.Title("Umango"),
+		app.Size(windowWidth, windowHeight),
+		app.MinSize(minWindowWidth, minWindowHeight),
+	)
+	s := screen{theme: newTheme(shaper), window: &window, explorer: explorer.NewExplorer(&window)}
 
 	loads := make(chan loadResult, 1)
 	go func() {
@@ -224,10 +227,10 @@ func (s *screen) applyLoad(result loadResult) {
 }
 
 func (s *screen) layout(gtx layout.Context) layout.Dimensions {
-	paint.Fill(gtx.Ops, s.theme.Bg)
+	paint.Fill(gtx.Ops, colorWindow)
 	switch {
 	case s.loadError != "":
-		return layoutCenteredText(gtx, s.theme, s.loadError)
+		return layoutCenteredText(gtx, s.theme, s.loadError, colorError)
 	case s.teamTrials == nil:
 		return layoutLoading(gtx, s.theme)
 	}
@@ -237,60 +240,120 @@ func (s *screen) layout(gtx layout.Context) layout.Dimensions {
 		}
 	}
 	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-		layout.Rigid(s.layoutTabBar),
+		layout.Rigid(s.layoutTopBar),
 		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-			if s.activeTab == tabVeteranList {
-				return s.veterans.layout(gtx, s.theme, s.explorer, s.window.Invalidate)
-			}
-			return s.teamTrials.layout(gtx, s.theme)
+			return layout.UniformInset(gutterWidth).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				if s.activeTab == tabVeteranList {
+					return s.veterans.layout(gtx, s.theme, s.explorer, s.window.Invalidate)
+				}
+				return s.teamTrials.layout(gtx, s.theme)
+			})
 		}),
 	)
 }
 
-// layoutTabBar draws the tab titles left to right, underlining the active tab
-func (s *screen) layoutTabBar(gtx layout.Context) layout.Dimensions {
-	gtx.Constraints.Min = image.Point{}
-	var size image.Point
+// layoutTopBar draws the wordmark and the page tabs left to right above a divider
+func (s *screen) layoutTopBar(gtx layout.Context) layout.Dimensions {
+	size := image.Pt(gtx.Constraints.Max.X, gtx.Dp(topBarHeight))
+	gtx.Constraints = layout.Constraints{Max: size}
+	line := gtx.Dp(borderWidth)
+	fillRect(gtx, colorBorder, image.Rect(0, size.Y-line, size.X, size.Y))
+
+	x := gtx.Dp(gutterWidth + panelTabPadding)
+	offset := op.Offset(image.Pt(x, 0)).Push(gtx.Ops)
+	x += layoutWordmark(gtx, s.theme).Size.X + gtx.Dp(wordmarkGap)
+	offset.Pop()
 	for i := range s.tabs {
-		offset := op.Offset(image.Pt(size.X, 0)).Push(gtx.Ops)
-		dims := material.Clickable(gtx, &s.tabs[i], func(gtx layout.Context) layout.Dimensions {
-			label := material.Body1(s.theme, tabTitles[i])
-			if i == s.activeTab {
-				label.Color = colorPrimary
-			}
-			dims := layout.UniformInset(tabPadding).Layout(gtx, label.Layout)
-			if i == s.activeTab {
-				indicator := image.Rectangle{
-					Min: image.Pt(0, dims.Size.Y-gtx.Dp(tabIndicatorHeight)),
-					Max: dims.Size,
-				}
-				paint.FillShape(gtx.Ops, colorPrimary, clip.Rect(indicator).Op())
-			}
-			return dims
-		})
+		offset := op.Offset(image.Pt(x, 0)).Push(gtx.Ops)
+		x += s.layoutPageTab(gtx, i).Size.X
 		offset.Pop()
-		size.X += dims.Size.X
-		size.Y = max(size.Y, dims.Size.Y)
 	}
 	return layout.Dimensions{Size: size}
+}
+
+// layoutWordmark draws the application name in heavy capitals shaded by the accent gradient,
+// its capitals centered in the height of the maximum constraints
+func layoutWordmark(gtx layout.Context, theme *material.Theme) layout.Dimensions {
+	height := gtx.Constraints.Max.Y
+	gtx.Constraints.Min = image.Point{}
+	wordmark := widget.Label{MaxLines: 1}
+	face := font.Font{Typeface: theme.Face, Weight: font.ExtraBold}
+	// The gradient spans the measured width of the text
+	macro := op.Record(gtx.Ops)
+	dims := wordmark.Layout(gtx, theme.Shaper, face, wordmarkSize, wordmarkText, op.CallOp{})
+	macro.Stop()
+	macro = op.Record(gtx.Ops)
+	paint.LinearGradientOp{
+		Stop1:  f32.Pt(0, 0),
+		Color1: colorWordmarkStart,
+		Stop2:  f32.Pt(float32(dims.Size.X), 0),
+		Color2: colorAccent,
+	}.Add(gtx.Ops)
+	gradient := macro.Stop()
+
+	capHeight := int(interCapHeight * float32(gtx.Sp(wordmarkSize)))
+	ascent := dims.Size.Y - dims.Baseline
+	defer op.Offset(image.Pt(0, (height+capHeight)/2-ascent)).Push(gtx.Ops).Pop()
+	wordmark.Layout(gtx, theme.Shaper, face, wordmarkSize, wordmarkText, gradient)
+	return layout.Dimensions{Size: image.Pt(dims.Size.X, height)}
+}
+
+// layoutPageTab draws page i's title, brightened while hovered or active, and underlines the
+// active page in the accent
+func (s *screen) layoutPageTab(gtx layout.Context, i int) layout.Dimensions {
+	tab := &s.tabs[i]
+	return tab.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		active := i == s.activeTab
+		c := colorTextMuted
+		if active || tab.Hovered() {
+			c = colorText
+		}
+		label := textLabel(s.theme, textSize, tabTitles[i], c)
+		label.Font.Weight = font.SemiBold
+		height, padding := gtx.Constraints.Max.Y, gtx.Dp(tabPadding)
+		gtx.Constraints.Min = image.Point{}
+		macro := op.Record(gtx.Ops)
+		dims := label.Layout(gtx)
+		call := macro.Stop()
+
+		size := image.Pt(dims.Size.X+2*padding, height)
+		offset := op.Offset(image.Pt(padding, (height-dims.Size.Y)/2)).Push(gtx.Ops)
+		call.Add(gtx.Ops)
+		offset.Pop()
+		if active {
+			indicator := image.Rect(padding, height-gtx.Dp(tabIndicatorHeight), size.X-padding, height)
+			fillRect(gtx, colorAccent, indicator)
+		}
+		defer clip.Rect{Max: size}.Push(gtx.Ops).Pop()
+		pointer.CursorPointer.Add(gtx.Ops)
+		return layout.Dimensions{Size: size}
+	})
 }
 
 func layoutLoading(gtx layout.Context, theme *material.Theme) layout.Dimensions {
 	return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		return layout.Flex{Axis: layout.Vertical, Alignment: layout.Middle}.Layout(gtx,
-			layout.Rigid(material.Body1(theme, loadingText).Layout),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				size := gtx.Dp(loadingIndicatorSize)
 				gtx.Constraints = layout.Exact(image.Pt(size, size))
 				return material.Loader(theme).Layout(gtx)
 			}),
+			layout.Rigid(layout.Spacer{Height: loadingTextGap}.Layout),
+			layout.Rigid(textLabel(theme, smallTextSize, loadingText, colorTextMuted).Layout),
 		)
 	})
 }
 
-func layoutCenteredText(gtx layout.Context, theme *material.Theme, s string) layout.Dimensions {
+// layoutCenteredText draws s centered in the constraints, wrapping at line breaks
+func layoutCenteredText(
+	gtx layout.Context,
+	theme *material.Theme,
+	s string,
+	c color.NRGBA,
+) layout.Dimensions {
 	return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		label := material.Body1(theme, s)
+		label := material.Label(theme, textSize, s)
+		label.Color = c
 		label.Alignment = text.Middle
 		return label.Layout(gtx)
 	})

@@ -95,6 +95,15 @@ func (t *Table[T]) Sort(col int) {
 	sort.Sort(t)
 }
 
+// SortedColumn returns the column the rows are sorted by and the direction of the sort
+//
+// Returns:
+// - col: Index of the sort column, meaningless when state is Unsorted
+// - state: Unsorted when the rows are in their original order
+func (t *Table[T]) SortedColumn() (col int, state SortState) {
+	return t.sortColumn, t.sortState
+}
+
 // Headers returns the header name of each column
 func (t *Table[T]) Headers() []string {
 	headers := make([]string, len(t.columns))
@@ -111,21 +120,6 @@ func (t *Table[T]) Columns() [][]string {
 		cols[i] = col.Value(t.data)
 	}
 	return cols
-}
-
-// ColumnWidths returns the length of the longest string in a column
-// including headers
-func (t *Table[T]) ColumnWidths() []int {
-	lengths := make([]int, len(t.columns))
-	for i, col := range t.columns {
-		lengths[i] = len(col.Header)
-		for _, val := range col.Value(t.data) {
-			if len(val) > lengths[i] {
-				lengths[i] = len(val)
-			}
-		}
-	}
-	return lengths
 }
 
 // itoaSlice converts a slice of ints to a slice of strings

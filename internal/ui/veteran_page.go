@@ -7,6 +7,7 @@ import (
 	"image/color"
 	"log"
 
+	"gioui.org/font"
 	"gioui.org/layout"
 	"gioui.org/op"
 	"gioui.org/op/clip"
@@ -24,9 +25,7 @@ const (
 	contentMinPercent = 60
 	contentMaxPercent = 80
 
-	headerPadding    = unit.Dp(4)
-	veteranPadding   = unit.Dp(8)
-	separatorHeight  = unit.Dp(1)
+	veteranPadding   = unit.Dp(10)
 	chipGap          = unit.Dp(4)
 	chipPaddingX     = unit.Dp(13)
 	chipPaddingY     = unit.Dp(5)
@@ -36,6 +35,13 @@ const (
 	maxStarSuffixLen = 9
 	// A star suffix is a prefix of this string, so suffixes never allocate
 	starSuffixes = " ★★★★★★★★★"
+
+	veteranPanelTitle  = "Veteran List"
+	loadButtonText     = "Load veterans file…"
+	emptyListText      = "Load a veterans file to list the factors of each veteran"
+	loadButtonPaddingX = unit.Dp(12)
+	loadButtonPaddingY = unit.Dp(6)
+	loadErrorGap       = unit.Dp(10)
 )
 
 // factorType is a succession_factor factor_type, which selects a factor chip's color and row
@@ -51,7 +57,7 @@ const (
 )
 
 var (
-	colorFactorBackground = color.NRGBA{R: 0x1f, G: 0x1f, B: 0x1f, A: 0xff}
+	colorFactorBackground = rgb(0x232323)
 	colorFactorOwnStars   = color.NRGBA{R: 0xff, G: 0xcf, B: 0x33, A: 0xff}
 	colorFactorParentStar = color.NRGBA{R: 0xff, G: 0xff, B: 0xff, A: 0xff}
 
@@ -166,12 +172,15 @@ type veteranLoad struct {
 // veteranPage lists the factors of every veteran in a veterans file the user picks
 type veteranPage struct {
 	dataStore  *data.DataStore
+	panel      panel
 	loadButton widget.Clickable
 	choosing   bool
 	loads      chan veteranLoad
 	loadError  string
 	chips      factorChips
-	list       widget.List
+	// Loaded veteran count, formatted when a file loads
+	veteranCount string
+	list         widget.List
 	// Content width in pixels, stepped between contentMinPercent and contentMaxPercent
 	width int
 }
@@ -179,6 +188,7 @@ type veteranPage struct {
 func newVeteranPage(dataStore *data.DataStore) *veteranPage {
 	return &veteranPage{
 		dataStore: dataStore,
+		panel:     panel{title: veteranPanelTitle},
 		loads:     make(chan veteranLoad, 1),
 		list:      widget.List{List: layout.List{Axis: layout.Vertical}},
 	}
@@ -200,6 +210,7 @@ func (p *veteranPage) update(gtx layout.Context, picker *explorer.Explorer, inva
 		default:
 			p.loadError = ""
 			p.chips = result.chips
+			p.veteranCount = fmt.Sprintf("%d veterans", p.chips.veteranCount())
 			p.list.Position = layout.Position{}
 		}
 	default:
@@ -231,32 +242,56 @@ func (p *veteranPage) layout(
 	invalidate func(),
 ) layout.Dimensions {
 	p.update(gtx, picker, invalidate)
-	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return layout.UniformInset(headerPadding).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				return p.layoutHeader(gtx, theme)
-			})
-		}),
-		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-			return p.layoutList(gtx, theme)
-		}),
+	return p.panel.layout(gtx, theme, true, p.veteranCount,
+		func(gtx layout.Context) layout.Dimensions {
+			return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return p.layoutToolbar(gtx, theme)
+				}),
+				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+					if p.chips.veteranCount() == 0 {
+						return layoutCenteredText(gtx, theme, emptyListText, colorTextMuted)
+					}
+					return p.layoutList(gtx, theme)
+				}),
+			)
+		},
 	)
 }
 
-func (p *veteranPage) layoutHeader(gtx layout.Context, theme *material.Theme) layout.Dimensions {
-	return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			if p.choosing {
-				gtx = gtx.Disabled()
-			}
-			return material.Button(theme, &p.loadButton, "Load").Layout(gtx)
-		}),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			label := material.Body1(theme, p.loadError)
-			label.Color = colorError
-			return layout.Inset{Left: headerPadding}.Layout(gtx, label.Layout)
-		}),
-	)
+// layoutToolbar draws the load button and the last load error above the veteran list
+func (p *veteranPage) layoutToolbar(gtx layout.Context, theme *material.Theme) layout.Dimensions {
+	inset := layout.Inset{
+		Top:    toolbarPadding,
+		Bottom: toolbarPadding,
+		Left:   veteranPadding,
+		Right:  veteranPadding,
+	}
+	dims := inset.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				if p.choosing {
+					gtx = gtx.Disabled()
+				}
+				button := material.Button(theme, &p.loadButton, loadButtonText)
+				button.TextSize = smallTextSize
+				button.Font.Weight = font.SemiBold
+				button.CornerRadius = controlRadius
+				button.Inset = layout.Inset{
+					Top:    loadButtonPaddingY,
+					Bottom: loadButtonPaddingY,
+					Left:   loadButtonPaddingX,
+					Right:  loadButtonPaddingX,
+				}
+				return button.Layout(gtx)
+			}),
+			layout.Rigid(layout.Spacer{Width: loadErrorGap}.Layout),
+			layout.Flexed(1, textLabel(theme, smallTextSize, p.loadError, colorError).Layout),
+		)
+	})
+	line := gtx.Dp(borderWidth)
+	fillRect(gtx, colorBorder, image.Rect(0, dims.Size.Y-line, dims.Size.X, dims.Size.Y))
+	return dims
 }
 
 // layoutList centers the veteran list in the stepped content width
@@ -266,7 +301,9 @@ func (p *veteranPage) layoutList(gtx layout.Context, theme *material.Theme) layo
 	defer op.Offset(image.Pt((available-p.width)/2, 0)).Push(gtx.Ops).Pop()
 	gtx.Constraints.Min.X = p.width
 	gtx.Constraints.Max.X = p.width
-	dims := material.List(theme, &p.list).Layout(gtx, p.chips.veteranCount(),
+	list := material.List(theme, &p.list)
+	styleScrollbar(&list.ScrollbarStyle)
+	dims := list.Layout(gtx, p.chips.veteranCount(),
 		func(gtx layout.Context, v int) layout.Dimensions {
 			return p.layoutVeteran(gtx, theme, v)
 		},
@@ -306,8 +343,8 @@ func (p *veteranPage) layoutVeteran(gtx layout.Context, theme *material.Theme, v
 		offset.Pop()
 	}
 	y += padding
-	separator := image.Rect(0, y, width, y+gtx.Dp(separatorHeight))
-	paint.FillShape(gtx.Ops, colorSeparator, clip.Rect(separator).Op())
+	separator := image.Rect(0, y, width, y+gtx.Dp(borderWidth))
+	fillRect(gtx, colorBorder, separator)
 	return layout.Dimensions{Size: image.Pt(width, separator.Max.Y)}
 }
 
@@ -338,15 +375,12 @@ func (p *veteranPage) layoutChipRow(gtx layout.Context, theme *material.Theme, s
 func (p *veteranPage) layoutChip(gtx layout.Context, theme *material.Theme, i int) image.Point {
 	paddingX, paddingY := gtx.Dp(chipPaddingX), gtx.Dp(chipPaddingY)
 
-	name := material.Body1(theme, p.chips.names[i])
-	name.Color = factorColors[p.chips.kinds[i]]
-	name.MaxLines = 1
-	stars := material.Body1(theme, p.chips.stars[i])
-	stars.Color = colorFactorOwnStars
+	name := textLabel(theme, textSize, p.chips.names[i], factorColors[p.chips.kinds[i]])
+	starColor := colorFactorOwnStars
 	if p.chips.inherited[i] {
-		stars.Color = colorFactorParentStar
+		starColor = colorFactorParentStar
 	}
-	stars.MaxLines = 1
+	stars := textLabel(theme, textSize, p.chips.stars[i], starColor)
 
 	macro := op.Record(gtx.Ops)
 	nameDims := name.Layout(gtx)

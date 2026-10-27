@@ -18,9 +18,16 @@ type SkillTableData struct {
 	origIndices []int
 }
 
+// Indices of the skill table columns in display order
+const (
+	SkillNameColumn = iota
+	SkillProcsColumn
+	SkillRateColumn
+)
+
 // Source of truth for column order and content
 var skillTableColumns = []Column[SkillTableData]{
-	{
+	SkillNameColumn: {
 		"Name",
 		func(td SkillTableData) []string { return td.Names },
 		func(td SkillTableData, state SortState, i, j int) bool {
@@ -33,7 +40,7 @@ var skillTableColumns = []Column[SkillTableData]{
 			return false
 		},
 	},
-	{
+	SkillProcsColumn: {
 		"Procs",
 		func(td SkillTableData) []string { return itoaSlice(td.Procs) },
 		func(td SkillTableData, state SortState, i, j int) bool {
@@ -46,7 +53,7 @@ var skillTableColumns = []Column[SkillTableData]{
 			return false
 		},
 	},
-	{
+	SkillRateColumn: {
 		"Rate",
 		func(td SkillTableData) []string { return ftoaSlice(td.Rate) },
 		func(td SkillTableData, state SortState, i, j int) bool {

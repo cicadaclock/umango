@@ -22,12 +22,21 @@ type VetTableData struct {
 	origIndices []int
 }
 
-// VetStyleColumn is the index of the "Style" column in vetTableColumns
-const VetStyleColumn = 4
+// Indices of the vet table columns in display order
+const (
+	VetIdColumn = iota
+	VetFieldedColumn
+	VetNameColumn
+	VetDistanceColumn
+	VetStyleColumn
+	VetRacesColumn
+	VetMaxColumn
+	VetAvgColumn
+)
 
 // Source of truth for column order and content
 var vetTableColumns = []Column[VetTableData]{
-	{
+	VetIdColumn: {
 		"ID",
 		func(td VetTableData) []string { return itoaSlice(td.TrainedCharaIds) },
 		func(td VetTableData, state SortState, i, j int) bool {
@@ -40,7 +49,7 @@ var vetTableColumns = []Column[VetTableData]{
 			return false
 		},
 	},
-	{
+	VetFieldedColumn: {
 		"Fielded",
 		func(td VetTableData) []string { return btoaSlice(td.Fielded) },
 		func(td VetTableData, state SortState, i, j int) bool {
@@ -53,7 +62,7 @@ var vetTableColumns = []Column[VetTableData]{
 			return false
 		},
 	},
-	{
+	VetNameColumn: {
 		"Name",
 		func(td VetTableData) []string { return td.Names },
 		func(td VetTableData, state SortState, i, j int) bool {
@@ -66,7 +75,7 @@ var vetTableColumns = []Column[VetTableData]{
 			return false
 		},
 	},
-	{
+	VetDistanceColumn: {
 		"Distance",
 		func(td VetTableData) []string { return td.Distances },
 		func(td VetTableData, state SortState, i, j int) bool {
@@ -79,7 +88,7 @@ var vetTableColumns = []Column[VetTableData]{
 			return false
 		},
 	},
-	{
+	VetStyleColumn: {
 		"Style",
 		func(td VetTableData) []string { return td.Styles },
 		func(td VetTableData, state SortState, i, j int) bool {
@@ -92,7 +101,7 @@ var vetTableColumns = []Column[VetTableData]{
 			return false
 		},
 	},
-	{
+	VetRacesColumn: {
 		"# Races",
 		func(td VetTableData) []string { return itoaSlice(td.NumRaces) },
 		func(td VetTableData, state SortState, i, j int) bool {
@@ -105,7 +114,7 @@ var vetTableColumns = []Column[VetTableData]{
 			return false
 		},
 	},
-	{
+	VetMaxColumn: {
 		"Max",
 		func(td VetTableData) []string { return itoaSlice(td.MaxScores) },
 		func(td VetTableData, state SortState, i, j int) bool {
@@ -118,7 +127,7 @@ var vetTableColumns = []Column[VetTableData]{
 			return false
 		},
 	},
-	{
+	VetAvgColumn: {
 		"Avg",
 		func(td VetTableData) []string { return itoaSlice(td.AvgScores) },
 		func(td VetTableData, state SortState, i, j int) bool {

@@ -3,11 +3,8 @@ package ui
 import (
 	"image"
 
-	"gioui.org/io/pointer"
 	"gioui.org/layout"
 	"gioui.org/op"
-	"gioui.org/op/clip"
-	"gioui.org/op/paint"
 	"gioui.org/unit"
 	"gioui.org/widget"
 	"gioui.org/widget/material"
@@ -15,11 +12,8 @@ import (
 )
 
 const (
-	filterIconSize = unit.Dp(32)
-	// Gap between a button's edge and its content, and between neighboring buttons
-	filterPadding = unit.Dp(4)
-	filterRadius  = unit.Dp(6)
-	filterBorder  = unit.Dp(2)
+	filterIconSize = unit.Dp(24)
+	filterGap      = unit.Dp(2)
 )
 
 // distanceFilter is a bar of toggle buttons, one per distance type, that select at most one
@@ -52,53 +46,23 @@ func (f *distanceFilter) update(gtx layout.Context) (changed bool) {
 	return changed
 }
 
-// layout draws the buttons left to right
+// layout draws the buttons left to right, outlining the active filter
 func (f *distanceFilter) layout(gtx layout.Context, theme *material.Theme) layout.Dimensions {
-	gap := gtx.Dp(filterPadding)
-	size := image.Pt(gap, 0)
+	gap := gtx.Dp(filterGap)
+	var size image.Point
 	for distance := range races.DistanceTypeIter() {
-		offset := op.Offset(image.Pt(size.X, gap)).Push(gtx.Ops)
-		dims := f.layoutButton(gtx, theme, distance)
+		offset := op.Offset(image.Pt(size.X, 0)).Push(gtx.Ops)
+		dims := layoutToolButton(gtx, &f.buttons[distance], distance == f.selected,
+			func(gtx layout.Context) layout.Dimensions {
+				return f.layoutButtonContent(gtx, theme, distance)
+			},
+		)
 		offset.Pop()
 		size.X += dims.Size.X + gap
 		size.Y = max(size.Y, dims.Size.Y)
 	}
-	size.Y += 2 * gap
+	size.X = max(size.X-gap, 0)
 	return layout.Dimensions{Size: size}
-}
-
-// layoutButton draws distance's button on a rounded background that marks the active filter
-// and the hovered button
-func (f *distanceFilter) layoutButton(
-	gtx layout.Context,
-	theme *material.Theme,
-	distance races.DistanceType,
-) layout.Dimensions {
-	button := &f.buttons[distance]
-	return button.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		padding := gtx.Dp(filterPadding)
-		macro := op.Record(gtx.Ops)
-		offset := op.Offset(image.Pt(padding, padding)).Push(gtx.Ops)
-		content := f.layoutButtonContent(gtx, theme, distance)
-		offset.Pop()
-		call := macro.Stop()
-
-		bounds := image.Rectangle{Max: content.Size.Add(image.Pt(2*padding, 2*padding))}
-		radius := gtx.Dp(filterRadius)
-		switch {
-		case distance == f.selected:
-			paint.FillShape(gtx.Ops, colorSelection, clip.UniformRRect(bounds, radius).Op(gtx.Ops))
-			border := gtx.Dp(filterBorder)
-			outline := clip.UniformRRect(bounds.Inset(border/2), radius).Path(gtx.Ops)
-			paint.FillShape(gtx.Ops, colorPrimary, clip.Stroke{Path: outline, Width: float32(border)}.Op())
-		case button.Hovered():
-			paint.FillShape(gtx.Ops, colorHover, clip.UniformRRect(bounds, radius).Op(gtx.Ops))
-		}
-		call.Add(gtx.Ops)
-		defer clip.Rect(bounds).Push(gtx.Ops).Pop()
-		pointer.CursorPointer.Add(gtx.Ops)
-		return layout.Dimensions{Size: bounds.Max}
-	})
 }
 
 // layoutButtonContent draws distance's racing shoe icon, or its name when the icon was not
@@ -113,8 +77,5 @@ func (f *distanceFilter) layoutButtonContent(
 		gtx.Constraints = layout.Exact(image.Pt(side, side))
 		return widget.Image{Src: icon, Fit: widget.Contain}.Layout(gtx)
 	}
-	gtx.Constraints.Min = image.Point{}
-	label := material.Body1(theme, distance.String())
-	label.MaxLines = 1
-	return label.Layout(gtx)
+	return textLabel(theme, smallTextSize, distance.String(), colorText).Layout(gtx)
 }
