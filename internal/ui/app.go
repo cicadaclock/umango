@@ -24,6 +24,7 @@ import (
 	"gioui.org/widget/material"
 	"gioui.org/x/explorer"
 	"github.com/cicadaclock/umango/internal/data"
+	"github.com/cicadaclock/umango/internal/logo"
 	"github.com/cicadaclock/umango/internal/races"
 	fontapi "github.com/go-text/typesetting/font"
 	ot "github.com/go-text/typesetting/font/opentype"
@@ -35,8 +36,11 @@ const (
 	windowWidth, windowHeight       = unit.Dp(1280), unit.Dp(720)
 	minWindowWidth, minWindowHeight = unit.Dp(960), unit.Dp(600)
 	topBarHeight                    = unit.Dp(40)
-	wordmarkSize                    = unit.Sp(16)
-	wordmarkText                    = "UMANGO"
+	logoSize                        = unit.Dp(26)
+	// Space between the logo and the wordmark
+	logoGap      = unit.Dp(6)
+	wordmarkSize = unit.Sp(16)
+	wordmarkText = "UMANGO"
 	// Cap height of Inter in ems
 	interCapHeight = 0.727
 	// Space between the wordmark and the first page tab
@@ -250,15 +254,19 @@ func (s *screen) layout(gtx layout.Context) layout.Dimensions {
 	)
 }
 
-// layoutTopBar draws the wordmark and the page tabs left to right above a divider
+// layoutTopBar draws the logo, the wordmark and the page tabs left to right above a divider
 func (s *screen) layoutTopBar(gtx layout.Context) layout.Dimensions {
 	size := image.Pt(gtx.Constraints.Max.X, gtx.Dp(topBarHeight))
 	gtx.Constraints = layout.Constraints{Max: size}
 	line := gtx.Dp(borderWidth)
 	fillRect(gtx, colorBorder, image.Rect(0, size.Y-line, size.X, size.Y))
 
-	x := gtx.Dp(gutterWidth + panelTabPadding)
-	offset := op.Offset(image.Pt(x, 0)).Push(gtx.Ops)
+	x, logoSide := gtx.Dp(gutterWidth+panelTabPadding), gtx.Dp(logoSize)
+	offset := op.Offset(image.Pt(x, (size.Y-logoSide)/2)).Push(gtx.Ops)
+	logo.Draw(gtx.Ops, float32(logoSide))
+	offset.Pop()
+	x += logoSide + gtx.Dp(logoGap)
+	offset = op.Offset(image.Pt(x, 0)).Push(gtx.Ops)
 	x += layoutWordmark(gtx, s.theme).Size.X + gtx.Dp(wordmarkGap)
 	offset.Pop()
 	for i := range s.tabs {

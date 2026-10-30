@@ -7,6 +7,8 @@ import (
 	"github.com/cicadaclock/umango/internal/ui"
 )
 
+//go:generate go run ./cmd/appicon
+
 var (
 	//go:embed assets/font
 	assets embed.FS
