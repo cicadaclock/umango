@@ -123,8 +123,8 @@ type scoreHistogram struct {
 	hovering bool
 	// Tooltip lines of the bucket starting at tooltipScore of the veteran at tooltipIndex,
 	// formatted again only when the pointer reaches another bucket
-	tooltipIndex, tooltipScore int
-	tooltipCount, tooltipRange string
+	tooltipIndex, tooltipScore                int
+	tooltipCount, tooltipRange, tooltipChance string
 }
 
 func newScoreHistogram(summary races.TTUmaSummary) scoreHistogram {
@@ -295,8 +295,9 @@ func appendBar(path *clip.Path, bar image.Rectangle, gap, radius float32) {
 	path.Close()
 }
 
-// drawTooltip draws the race count and score range of the veteran's bucket at position bucket
-// in a box above its bar, kept within the plot's width
+// drawTooltip draws the race count and score range of the veteran's bucket at position bucket,
+// and the chance of the veteran scoring at least its lower bound, in a box above its bar, kept
+// within the plot's width
 func (h *scoreHistogram) drawTooltip(
 	gtx layout.Context,
 	theme *material.Theme,
@@ -308,21 +309,20 @@ func (h *scoreHistogram) drawTooltip(
 		h.tooltipIndex, h.tooltipScore = index, score
 		h.tooltipCount = formatRaceCount(h.bucketCounts[index][bucket])
 		h.tooltipRange = formatThousands(score) + " – " + formatThousands(score+scoreBucketWidth)
+		h.tooltipChance = formatScoreChance(h.bucketScores[index], h.bucketCounts[index], score)
 	}
 	count := textLabel(theme, smallTextSize, h.tooltipCount, colorText)
 	count.Font.Weight = font.SemiBold
 	macro := op.Record(gtx.Ops)
-	countDims := count.Layout(gtx)
-	offset := op.Offset(image.Pt(0, countDims.Size.Y)).Push(gtx.Ops)
-	rangeDims := axisLabel(theme, h.tooltipRange).Layout(gtx)
-	offset.Pop()
+	textDims := layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+		layout.Rigid(count.Layout),
+		layout.Rigid(axisLabel(theme, h.tooltipRange).Layout),
+		layout.Rigid(axisLabel(theme, h.tooltipChance).Layout),
+	)
 	text := macro.Stop()
 
 	paddingX, paddingY := gtx.Dp(tooltipPaddingX), gtx.Dp(tooltipPaddingY)
-	box := image.Rectangle{Max: image.Pt(
-		max(countDims.Size.X, rangeDims.Size.X)+2*paddingX,
-		countDims.Size.Y+rangeDims.Size.Y+2*paddingY,
-	)}
+	box := image.Rectangle{Max: textDims.Size.Add(image.Pt(2*paddingX, 2*paddingY))}
 	bar := h.barRect(plot, index, bucket)
 	origin := image.Pt(
 		min(max((bar.Min.X+bar.Max.X-box.Dx())/2, plot.Min.X), plot.Max.X-box.Dx()),
@@ -342,6 +342,19 @@ func formatRaceCount(count int) string {
 		return "1 race"
 	}
 	return fmt.Sprintf("%d races", count)
+}
+
+// formatScoreChance writes the share of a veteran's races, bucketed into bucketScores and
+// bucketCounts, that scored at least score, as "34.2% at ≥ 70k"
+func formatScoreChance(bucketScores, bucketCounts []int, score int) string {
+	atLeast, total := 0, 0
+	for i, count := range bucketCounts {
+		total += count
+		if bucketScores[i] >= score {
+			atLeast += count
+		}
+	}
+	return fmt.Sprintf("%.1f%% at ≥ %s", 100*float64(atLeast)/float64(total), formatThousands(score))
 }
 
 func axisLabel(theme *material.Theme, s string) material.LabelStyle {
