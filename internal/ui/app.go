@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"image"
 	"image/color"
-	"io/fs"
 	"log"
 	"os"
 
@@ -38,6 +37,8 @@ const (
 	topBarHeight                    = unit.Dp(40)
 	wordmarkSize                    = unit.Sp(16)
 	wordmarkText                    = "UMANGO"
+	// Cap height of Inter in ems
+	interCapHeight = 0.727
 	// Space between the wordmark and the first page tab
 	wordmarkGap                   = unit.Dp(18)
 	tabPadding                    = unit.Dp(10)
@@ -72,7 +73,7 @@ var (
 // fatally when the window fails.
 //
 // Inputs:
-// - assets: Embedded file system holding the Inter font and the extracted game icons
+// - assets: Embedded file system holding the Inter font
 //
 // Returns:
 // - err: Failure reading or parsing the font, before the window opens
@@ -86,7 +87,7 @@ func App(assets embed.FS) error {
 		return err
 	}
 	go func() {
-		if err := run(assets, fontData, shaper); err != nil {
+		if err := run(fontData, shaper); err != nil {
 			log.Fatalf("run window: %v", err)
 		}
 		os.Exit(0)
@@ -146,23 +147,20 @@ type loadResult struct {
 	err        error
 }
 
-// load reads master.mdb, the saved races and the distance type icons concurrently and
-// aggregates them into the TT page
-func load(assets fs.FS, fontData []byte) loadResult {
+// load reads master.mdb and the saved races concurrently and aggregates them into the TT page
+func load(fontData []byte) loadResult {
 	var (
-		result        loadResult
-		resultSet     races.TeamTrialResultSet
-		distanceIcons distanceTypeIcons
+		result    loadResult
+		resultSet races.TeamTrialResultSet
 	)
 	var g errgroup.Group
 	g.Go(func() (err error) { result.shaper, err = newShaper(fontData, true); return })
 	g.Go(func() (err error) { result.dataStore, err = data.Init(); return })
 	g.Go(func() (err error) { resultSet, err = loadTeamTrialResults(); return })
-	g.Go(func() (err error) { distanceIcons, err = loadDistanceTypeIcons(assets); return })
 	if err := g.Wait(); err != nil {
 		return loadResult{err: err}
 	}
-	result.teamTrials = newTeamTrialsPage(result.dataStore, resultSet, distanceIcons)
+	result.teamTrials = newTeamTrialsPage(result.dataStore, resultSet)
 	return result
 }
 
@@ -179,7 +177,7 @@ type screen struct {
 }
 
 // run drives the window event loop until the window closes
-func run(assets fs.FS, fontData []byte, shaper *text.Shaper) error {
+func run(fontData []byte, shaper *text.Shaper) error {
 	var window app.Window
 	window.Option(
 		app.Title("Umango"),
@@ -190,7 +188,7 @@ func run(assets fs.FS, fontData []byte, shaper *text.Shaper) error {
 
 	loads := make(chan loadResult, 1)
 	go func() {
-		loads <- load(assets, fontData)
+		loads <- load(fontData)
 		window.Invalidate()
 	}()
 

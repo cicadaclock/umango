@@ -25,9 +25,10 @@ const (
 	gutterWidth   = unit.Dp(6)
 	borderWidth   = unit.Dp(1)
 	controlRadius = unit.Dp(4)
-	// Gap between a tool button's edge and its content
-	toolButtonPadding = unit.Dp(3)
-	scrollbarWidth    = unit.Dp(6)
+	// Gap between a pill's edge and its label
+	pillPaddingX   = unit.Dp(10)
+	pillPaddingY   = unit.Dp(4)
+	scrollbarWidth = unit.Dp(6)
 )
 
 // Dark palette sampled from the Blick video editor: near black gutters around flat panels, gray
@@ -117,34 +118,41 @@ func strokeRRect(gtx layout.Context, c color.NRGBA, r image.Rectangle, radius in
 	paint.FillShape(gtx.Ops, c, clip.Stroke{Path: path, Width: float32(width)}.Op())
 }
 
-// layoutToolButton draws content on a rounded face that shows button's hovered and pressed
-// states, or an accent outline while active
-func layoutToolButton(
+// layoutPill draws label in an outlined capsule that shows button's hovered and pressed states,
+// or an accent fill and outline while active
+func layoutPill(
 	gtx layout.Context,
+	theme *material.Theme,
 	button *widget.Clickable,
+	label string,
 	active bool,
-	content layout.Widget,
 ) layout.Dimensions {
 	return button.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		padding := gtx.Dp(toolButtonPadding)
+		c := colorTextMuted
+		if active || button.Hovered() {
+			c = colorText
+		}
+		padding := image.Pt(gtx.Dp(pillPaddingX), gtx.Dp(pillPaddingY))
 		gtx.Constraints.Min = image.Point{}
 		macro := op.Record(gtx.Ops)
-		offset := op.Offset(image.Pt(padding, padding)).Push(gtx.Ops)
-		dims := content(gtx)
+		offset := op.Offset(padding).Push(gtx.Ops)
+		dims := textLabel(theme, smallTextSize, label, c).Layout(gtx)
 		offset.Pop()
 		call := macro.Stop()
 
-		bounds := image.Rectangle{Max: dims.Size.Add(image.Pt(2*padding, 2*padding))}
-		radius := gtx.Dp(controlRadius)
+		bounds := image.Rectangle{Max: dims.Size.Add(padding.Mul(2))}
+		radius := bounds.Dy() / 2
+		border := colorBorderStrong
 		switch {
 		case active:
 			paint.FillShape(gtx.Ops, colorSelection, clip.UniformRRect(bounds, radius).Op(gtx.Ops))
-			strokeRRect(gtx, colorAccent, bounds, radius)
+			border = colorAccent
 		case button.Pressed():
 			paint.FillShape(gtx.Ops, colorPressed, clip.UniformRRect(bounds, radius).Op(gtx.Ops))
 		case button.Hovered():
 			paint.FillShape(gtx.Ops, colorHover, clip.UniformRRect(bounds, radius).Op(gtx.Ops))
 		}
+		strokeRRect(gtx, border, bounds, radius)
 		call.Add(gtx.Ops)
 		defer clip.Rect(bounds).Push(gtx.Ops).Pop()
 		pointer.CursorPointer.Add(gtx.Ops)

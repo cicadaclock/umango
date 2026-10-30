@@ -21,7 +21,6 @@ import (
 
 const (
 	tableCellPadding  = unit.Dp(10)
-	tableIconGap      = unit.Dp(6)
 	sortArrowWidth    = unit.Dp(7)
 	sortArrowHeight   = unit.Dp(4)
 	sortArrowGap      = unit.Dp(5)
@@ -34,10 +33,9 @@ const (
 type tableColumn struct {
 	// Text whose width the column always fits; empty fits the widest cell of the first layout
 	sample string
-	// Side of the square icon that tableView.layoutIcon draws before the cell text
+	// Side of the square icon that tableView.layoutIcon draws centered in place of the cell text;
+	// zero draws the text
 	icon unit.Dp
-	// Whether the icon, centered, replaces the cell text
-	iconOnly bool
 	// Whether the column takes the width the others leave, truncating its cells with an ellipsis
 	// down to the width of its header
 	fill      bool
@@ -66,7 +64,7 @@ type tableView struct {
 	sortColumn   int
 	sortState    races.SortState
 	// layoutIcon draws the icon of a cell, in a column with one, into the exact constraints
-	layoutIcon func(gtx layout.Context, theme *material.Theme, row, col int)
+	layoutIcon func(gtx layout.Context, row, col int)
 }
 
 func newTableView(
@@ -163,8 +161,8 @@ func (tv *tableView) layout(gtx layout.Context, theme *material.Theme) layout.Di
 	return dims
 }
 
-// fitColumns sizes each column to fit its header beside a sort arrow, and its icon and sample
-// or widest cell
+// fitColumns sizes each column to fit its header beside a sort arrow, and its icon, sample or
+// widest cell
 func (tv *tableView) fitColumns(gtx layout.Context, theme *material.Theme) {
 	gtx.Constraints = layout.Constraints{Max: image.Pt(unboundedTextWidth, gtx.Constraints.Max.Y)}
 	padding := gtx.Dp(tableCellPadding)
@@ -175,18 +173,14 @@ func (tv *tableView) fitColumns(gtx layout.Context, theme *material.Theme) {
 		header := measureLabel(gtx, headerLabel(theme, tv.headers[col], colorText)).X + arrow
 		content := 0
 		switch {
-		case style.fill, style.iconOnly:
+		case style.fill:
+		case style.icon > 0:
+			content = gtx.Dp(style.icon)
 		case style.sample != "":
 			content = measureLabel(gtx, textLabel(theme, textSize, style.sample, colorText)).X
 		default:
 			for _, s := range tv.columns[col] {
 				content = max(content, measureLabel(gtx, textLabel(theme, textSize, s, colorText)).X)
-			}
-		}
-		if style.icon > 0 {
-			content += gtx.Dp(style.icon)
-			if !style.iconOnly {
-				content += gtx.Dp(tableIconGap)
 			}
 		}
 		tv.widths[col] = unit.Dp(float32(max(header, content)+2*padding) / gtx.Metric.PxPerDp)
@@ -297,23 +291,12 @@ func (tv *tableView) layoutCell(
 	}
 
 	style := tv.styles[col]
-	padding := gtx.Dp(tableCellPadding)
-	left := padding
 	if style.icon > 0 {
 		side := gtx.Dp(style.icon)
-		x := padding
-		if style.iconOnly {
-			x = (size.X - side) / 2
-		}
-		offset := op.Offset(image.Pt(x, (size.Y-side)/2)).Push(gtx.Ops)
-		iconGtx := gtx
-		iconGtx.Constraints = layout.Exact(image.Pt(side, side))
-		tv.layoutIcon(iconGtx, theme, row, col)
-		offset.Pop()
-		if style.iconOnly {
-			return layout.Dimensions{Size: size}
-		}
-		left += side + gtx.Dp(tableIconGap)
+		defer op.Offset(size.Sub(image.Pt(side, side)).Div(2)).Push(gtx.Ops).Pop()
+		gtx.Constraints = layout.Exact(image.Pt(side, side))
+		tv.layoutIcon(gtx, row, col)
+		return layout.Dimensions{Size: size}
 	}
 
 	c := colorText
@@ -322,12 +305,13 @@ func (tv *tableView) layoutCell(
 	}
 	label := textLabel(theme, textSize, tv.columns[col][row], c)
 	label.Alignment = style.alignment
-	width := max(size.X-left-padding, 0)
+	padding := gtx.Dp(tableCellPadding)
+	width := max(size.X-2*padding, 0)
 	gtx.Constraints = layout.Constraints{Min: image.Pt(width, 0), Max: image.Pt(width, size.Y)}
 	macro := op.Record(gtx.Ops)
 	dims := label.Layout(gtx)
 	call := macro.Stop()
-	defer op.Offset(image.Pt(left, (size.Y-dims.Size.Y)/2)).Push(gtx.Ops).Pop()
+	defer op.Offset(image.Pt(padding, (size.Y-dims.Size.Y)/2)).Push(gtx.Ops).Pop()
 	call.Add(gtx.Ops)
 	return layout.Dimensions{Size: size}
 }

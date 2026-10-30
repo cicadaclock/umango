@@ -14,7 +14,6 @@ import (
 	"gioui.org/op/paint"
 	"gioui.org/text"
 	"gioui.org/unit"
-	"gioui.org/widget"
 	"gioui.org/widget/material"
 	"gioui.org/x/component"
 	"github.com/cicadaclock/umango/internal/data"
@@ -27,16 +26,14 @@ const (
 	// Initial share and bounds of the sidebar height given to the histogram
 	histogramRatio, minHistogramRatio, maxHistogramRatio = 0.45, 0.2, 0.8
 
-	vetRowHeight         = unit.Dp(32)
-	skillRowHeight       = unit.Dp(28)
-	runningStyleIconSize = unit.Dp(26)
-	distanceIconSize     = unit.Dp(20)
-	fieldedMarkSize      = unit.Dp(14)
-	toolbarPadding       = unit.Dp(6)
-	toolbarLabelGap      = unit.Dp(8)
-	splitGripLength      = unit.Dp(32)
-	splitGripThickness   = unit.Dp(2)
-	distanceFilterLabel  = "Distance"
+	vetRowHeight        = unit.Dp(32)
+	skillRowHeight      = unit.Dp(28)
+	fieldedMarkSize     = unit.Dp(14)
+	toolbarPadding      = unit.Dp(6)
+	toolbarLabelGap     = unit.Dp(8)
+	splitGripLength     = unit.Dp(32)
+	splitGripThickness  = unit.Dp(2)
+	distanceFilterLabel = "Distance"
 )
 
 // Panels of the TT page, indexing teamTrialsPage.panels
@@ -49,14 +46,12 @@ const (
 
 var (
 	vetColumns = [...]tableColumn{
-		races.VetIdColumn:       {alignment: text.End},
-		races.VetFieldedColumn:  {icon: fieldedMarkSize, iconOnly: true, alignment: text.Middle},
-		races.VetNameColumn:     {fill: true},
-		races.VetDistanceColumn: {icon: distanceIconSize},
-		races.VetStyleColumn:    {icon: runningStyleIconSize, iconOnly: true, alignment: text.Middle},
-		races.VetRacesColumn:    {alignment: text.End},
-		races.VetMaxColumn:      {alignment: text.End},
-		races.VetAvgColumn:      {alignment: text.End},
+		races.VetIdColumn:      {alignment: text.End},
+		races.VetFieldedColumn: {icon: fieldedMarkSize, alignment: text.Middle},
+		races.VetNameColumn:    {fill: true},
+		races.VetRacesColumn:   {alignment: text.End},
+		races.VetMaxColumn:     {alignment: text.End},
+		races.VetAvgColumn:     {alignment: text.End},
 	}
 	// Procs always shows four digits and Rate two decimals; Name takes the rest of the sidebar
 	skillColumns = [...]tableColumn{
@@ -104,20 +99,15 @@ type teamTrialsPage struct {
 
 // newTeamTrialsPage aggregates the loaded races and selects the first vet table row. It does
 // not touch the window, so it runs on the loader goroutine.
-func newTeamTrialsPage(
-	dataStore *data.DataStore,
-	resultSet races.TeamTrialResultSet,
-	distanceIcons distanceTypeIcons,
-) *teamTrialsPage {
+func newTeamTrialsPage(dataStore *data.DataStore, resultSet races.TeamTrialResultSet) *teamTrialsPage {
 	summary := resultSet.Summarize()
 	p := &teamTrialsPage{
-		summary:        summary,
-		dataStore:      dataStore,
-		vetTable:       races.NewVetTable(dataStore, summary),
-		skillTable:     races.NewSkillTable(),
-		histogram:      newScoreHistogram(summary),
-		distanceFilter: distanceFilter{icons: distanceIcons},
-		sidebarSplit:   component.Resize{Axis: layout.Vertical, Ratio: histogramRatio},
+		summary:      summary,
+		dataStore:    dataStore,
+		vetTable:     races.NewVetTable(dataStore, summary),
+		skillTable:   races.NewSkillTable(),
+		histogram:    newScoreHistogram(summary),
+		sidebarSplit: component.Resize{Axis: layout.Vertical, Ratio: histogramRatio},
 		panels: [teamTrialsPanelCount]panel{
 			vetPanel:       {title: "Veterans"},
 			histogramPanel: {title: "Score Distribution"},
@@ -126,7 +116,7 @@ func newTeamTrialsPage(
 		selectedIndex: -1,
 	}
 	p.vetView = newTableView(p.vetTable.Headers(), vetColumns[:], vetRowHeight, true)
-	p.vetView.layoutIcon = p.layoutVetIcon
+	p.vetView.layoutIcon = p.layoutFieldedMark
 	p.showVetRows()
 	p.skillView = newTableView(p.skillTable.Headers(), skillColumns[:], skillRowHeight, false)
 	p.skillView.setColumns(p.skillTable.Columns())
@@ -175,25 +165,11 @@ func (p *teamTrialsPage) selectRow(row int) {
 	p.skillView.scrollToTop()
 }
 
-// layoutVetIcon draws the fielded mark, distance type icon or running style icon of a vet
-// table cell
-func (p *teamTrialsPage) layoutVetIcon(
-	gtx layout.Context,
-	theme *material.Theme,
-	row, col int,
-) {
-	shown := p.vetShown.Data()
-	switch col {
-	case races.VetFieldedColumn:
-		if shown.Fielded[row] {
-			drawCheckMark(gtx, colorAccent)
-		}
-	case races.VetDistanceColumn:
-		if icon := p.distanceFilter.icons[shown.DistanceTypes[row]]; iconLoaded(icon) {
-			widget.Image{Src: icon, Fit: widget.Contain}.Layout(gtx)
-		}
-	case races.VetStyleColumn:
-		layoutRunningStyleIcon(gtx, theme, shown.StyleTypes[row])
+// layoutFieldedMark draws the check mark of a fielded veteran's row in the Fielded column, the
+// vet table's only icon column
+func (p *teamTrialsPage) layoutFieldedMark(gtx layout.Context, row, _ int) {
+	if p.vetShown.Data().Fielded[row] {
+		drawCheckMark(gtx, colorAccent)
 	}
 }
 
