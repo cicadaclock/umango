@@ -4,7 +4,9 @@ import "github.com/cicadaclock/umango/internal/veteran"
 
 // Starting parameters for a single team trial round
 type RaceStartParams struct {
-	Round           int `json:"round"`
+	Round int `json:"round"`
+	// race_instance id in master.mdb, which sets the course
+	RaceInstanceId  int `json:"race_instance_id"`
 	Season          int `json:"season"`
 	Weather         int `json:"weather"`
 	GroundCondition int `json:"ground_condition"`

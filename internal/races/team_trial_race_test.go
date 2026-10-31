@@ -129,6 +129,11 @@ var currentUmas = []int{
 // Distance of each round in order
 var distanceOrder = []DistanceType{Mile, Sprint, Medium, Long, Dirt}
 
+// unknownCourses knows no course, so Summarize judges no last spurts
+type unknownCourses struct{}
+
+func (unknownCourses) CourseDistance(int) int { return 0 }
+
 func TestAppend(t *testing.T) {
 	s := TeamTrialResultSet{}
 	s.append(ttResult)
@@ -142,7 +147,7 @@ func TestAppend(t *testing.T) {
 
 // Tests if a single TT result summary outputs the expected values
 func TestSummarizeSingleResult(t *testing.T) {
-	s := TeamTrialResultSet{Set: []TeamTrialResult{ttResult}}.Summarize()
+	s := TeamTrialResultSet{Set: []TeamTrialResult{ttResult}}.Summarize(unknownCourses{})
 
 	// A result fields at most 15 umas, and opponents are not ours
 	if !reflect.DeepEqual(s.TrainedCharaIds, currentUmas) {
@@ -170,7 +175,7 @@ func TestSummarizeSingleResult(t *testing.T) {
 
 // Tests if a single TT result recorded twice outputs the expected values
 func TestSummarizeDoubleResult(t *testing.T) {
-	s := TeamTrialResultSet{Set: []TeamTrialResult{ttResult, ttResult}}.Summarize()
+	s := TeamTrialResultSet{Set: []TeamTrialResult{ttResult, ttResult}}.Summarize(unknownCourses{})
 
 	// Same result twice means the second race introduced no new umas
 	// so only the Scores slice should have 1 extra score
@@ -252,7 +257,7 @@ func TestSummarizeOrderResult(t *testing.T) {
 	// Copied data shouldn't alter curResult slice now
 	prevResult.RaceStartParamsArray[0].RaceHorseDataArray[0].TrainedCharaId = 1234
 	prevResult.RaceResultArray[0].CharaResultArray[0].TrainedCharaId = 1234
-	s := TeamTrialResultSet{Set: []TeamTrialResult{prevResult, curResult}}.Summarize()
+	s := TeamTrialResultSet{Set: []TeamTrialResult{prevResult, curResult}}.Summarize(unknownCourses{})
 
 	if s.FieldedCount != len(currentUmas) {
 		t.Errorf("s.FieldedCount == %d, want 15", s.FieldedCount)
@@ -270,7 +275,7 @@ func TestSummarizeBadResult(t *testing.T) {
 	ttr := ttResult
 	ttr.RaceResultArray = nil
 
-	s := TeamTrialResultSet{Set: []TeamTrialResult{ttr}}.Summarize()
+	s := TeamTrialResultSet{Set: []TeamTrialResult{ttr}}.Summarize(unknownCourses{})
 	if s.Len() != 0 {
 		t.Errorf("s.Len() == %d, want 0", s.Len())
 	}
@@ -282,7 +287,7 @@ func TestSummarizeBadResultWithGoodResult(t *testing.T) {
 	ttr := ttResult
 	ttr.RaceResultArray = nil
 
-	s := TeamTrialResultSet{Set: []TeamTrialResult{ttr, ttResult}}.Summarize()
+	s := TeamTrialResultSet{Set: []TeamTrialResult{ttr, ttResult}}.Summarize(unknownCourses{})
 	if s.Len() != 15 {
 		t.Errorf("s.Len() == %d, want 0", s.Len())
 	}

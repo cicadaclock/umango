@@ -16,6 +16,8 @@ type DataStore struct {
 	successionRelationMembers map[int][]int
 	factorType                map[int]int
 	ttRawScores               map[int]int
+	// Race instance ID to course length in meters
+	courseDistances map[int]int
 
 	// Text mappings
 	// Skill ID to factor name
@@ -51,6 +53,7 @@ func Init() (*DataStore, error) {
 	g.Go(func() (err error) { dataStore.charaNames, err = db.TextDataCharaName(); return })
 	g.Go(func() (err error) { dataStore.factorType, err = db.SuccessionFactors(); return })
 	g.Go(func() (err error) { dataStore.ttRawScores, err = db.TeamStadiumRawScores(); return })
+	g.Go(func() (err error) { dataStore.courseDistances, err = db.RaceInstanceDistances(); return })
 	if err := g.Wait(); err != nil {
 		return &dataStore, fmt.Errorf("load db data: %w", err)
 	}
@@ -141,6 +144,11 @@ func (dataStore *DataStore) CardChara(cardId int) int {
 // CharaName maps a chara ID to its chara name
 func (dataStore *DataStore) CharaName(charaId int) string {
 	return dataStore.charaNames[charaId]
+}
+
+// CourseDistance maps a race instance ID to the length of its course in meters, 0 when unknown
+func (dataStore *DataStore) CourseDistance(raceInstanceId int) int {
+	return dataStore.courseDistances[raceInstanceId]
 }
 
 // RelationMembers maps a chara ID to its succession relation members

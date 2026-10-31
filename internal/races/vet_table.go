@@ -16,7 +16,9 @@ type VetTableData struct {
 	NumRaces        []int
 	MaxScores       []int
 	AvgScores       []int
-	Fielded         []bool
+	// Fraction of races in which the uma started its last spurt on entering the final leg
+	SpurtRates []float32
+	Fielded    []bool
 
 	// Original ordering that sorts by currently used umas
 	origIndices []int
@@ -32,6 +34,7 @@ const (
 	VetRacesColumn
 	VetMaxColumn
 	VetAvgColumn
+	VetSpurtColumn
 )
 
 // Source of truth for column order and content
@@ -140,6 +143,19 @@ var vetTableColumns = []Column[VetTableData]{
 			return false
 		},
 	},
+	VetSpurtColumn: {
+		"Spurt Rate",
+		func(td VetTableData) []string { return percentSlice(td.SpurtRates) },
+		func(td VetTableData, state SortState, i, j int) bool {
+			switch state {
+			case Ascending:
+				return td.SpurtRates[i] < td.SpurtRates[j]
+			case Descending:
+				return td.SpurtRates[i] > td.SpurtRates[j]
+			}
+			return false
+		},
+	},
 }
 
 // NewVetTable builds the TT veteran table from a summary
@@ -159,6 +175,7 @@ func newVetTableData(dataStore VetTableMapper, summary TTUmaSummary) VetTableDat
 		NumRaces:        make([]int, 0, n),
 		MaxScores:       make([]int, 0, n),
 		AvgScores:       make([]int, 0, n),
+		SpurtRates:      make([]float32, 0, n),
 		Fielded:         make([]bool, 0, n),
 		origIndices:     make([]int, 0, n),
 	}
@@ -180,6 +197,11 @@ func newVetTableData(dataStore VetTableMapper, summary TTUmaSummary) VetTableDat
 		result.NumRaces = append(result.NumRaces, scores.Len())
 		result.MaxScores = append(result.MaxScores, scores.Max())
 		result.AvgScores = append(result.AvgScores, scores.Average())
+		var spurtRate float32
+		if summary.SpurtRaces[i] > 0 {
+			spurtRate = float32(summary.FullSpurts[i]) / float32(summary.SpurtRaces[i])
+		}
+		result.SpurtRates = append(result.SpurtRates, spurtRate)
 		result.Fielded = append(result.Fielded, i < summary.FieldedCount)
 		result.origIndices = append(result.origIndices, i)
 	}
@@ -198,6 +220,7 @@ func (td VetTableData) Filter(indices []int) VetTableData {
 		NumRaces:        filterSlice(td.NumRaces, indices),
 		MaxScores:       filterSlice(td.MaxScores, indices),
 		AvgScores:       filterSlice(td.AvgScores, indices),
+		SpurtRates:      filterSlice(td.SpurtRates, indices),
 		Fielded:         filterSlice(td.Fielded, indices),
 		origIndices:     filterSlice(td.origIndices, indices),
 	}
@@ -218,6 +241,7 @@ func (td VetTableData) Swap(i, j int) {
 	swapSlice(td.NumRaces, i, j)
 	swapSlice(td.MaxScores, i, j)
 	swapSlice(td.AvgScores, i, j)
+	swapSlice(td.SpurtRates, i, j)
 	swapSlice(td.Fielded, i, j)
 	swapSlice(td.origIndices, i, j)
 }

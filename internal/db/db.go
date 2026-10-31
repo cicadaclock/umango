@@ -96,6 +96,17 @@ func (db *DB) TeamStadiumRawScores() (map[int]int, error) {
 	return result, nil
 }
 
+// RaceInstanceDistances maps each race_instance id to the length of its course in meters
+func (db *DB) RaceInstanceDistances() (map[int]int, error) {
+	result, err := queryMap[int](db.SqlDB, `SELECT ri.id, rcs.distance FROM race_instance AS ri
+		JOIN race AS r ON r.id = ri.race_id
+		JOIN race_course_set AS rcs ON rcs.id = r.course_set`)
+	if err != nil {
+		return nil, fmt.Errorf("race_instance distances: %w", err)
+	}
+	return result, nil
+}
+
 // Map skill_id to text from text_data
 func (db *DB) TextDataSkills() (map[int]string, error) {
 	result, err := db.textData(textDataSkills, 0, 0, false)

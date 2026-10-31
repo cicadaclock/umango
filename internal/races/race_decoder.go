@@ -64,6 +64,19 @@ type HorseResult struct {
 	FinishTimeSim float32
 }
 
+// Meters past the start of the final leg within which a last spurt counts as started on time.
+// Spurts start within a sim frame's travel of it, a few meters, when on time, and 30 m or more
+// past it when delayed.
+const spurtStartTolerance = 10
+
+// fullSpurt reports whether the horse started its last spurt on entering the final leg, the
+// last third of a course courseDistance meters long, rather than later or never, as a horse
+// short of HP does
+func (r HorseResult) fullSpurt(courseDistance int) bool {
+	pastFinalLeg := r.LastSpurtStartDistance - float32(courseDistance)*2/3
+	return pastFinalLeg >= 0 && pastFinalLeg < spurtStartTolerance
+}
+
 type RaceEventType int8
 
 const (

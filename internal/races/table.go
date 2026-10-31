@@ -146,6 +146,15 @@ func ftoaSlice(a []float32) []string {
 	return result
 }
 
+// percentSlice converts a slice of fractions to a slice of percentages with one decimal
+func percentSlice(a []float32) []string {
+	result := make([]string, 0, len(a))
+	for _, f := range a {
+		result = append(result, strconv.FormatFloat(float64(f)*100, 'f', 1, 32)+"%")
+	}
+	return result
+}
+
 // btoaSlice converts a slice of bools to a slice of strings
 func btoaSlice(a []bool) []string {
 	result := make([]string, 0, len(a))

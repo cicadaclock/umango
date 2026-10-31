@@ -29,6 +29,10 @@ type TTUmaSummary struct {
 	ScoreBreakdowns  []ScoreBreakdown
 	DistanceTypes    []DistanceType
 	SkillActivations []map[int]int
+	// Races in Scores whose replay and course are known, and those of them in which the uma
+	// started its last spurt on entering the final leg
+	SpurtRaces []int
+	FullSpurts []int
 	// FieldedCount counts the number of umas we are fielding on our team
 	FieldedCount int
 }
@@ -37,8 +41,18 @@ func (s TTUmaSummary) Len() int {
 	return len(s.TrainedCharaIds)
 }
 
+// CourseMapper provides the course data Summarize needs from DataStore
+type CourseMapper interface {
+	// CourseDistance maps a race instance ID to the length of its course in meters, 0 when
+	// unknown
+	CourseDistance(raceInstanceId int) int
+}
+
 // Summarize walks TTRS once, collecting anything needed into the TTUmaSummary
-func (ttrs TeamTrialResultSet) Summarize() TTUmaSummary {
+//
+// Inputs:
+// - courses: Course lengths, which judge whether each uma's last spurt started on time
+func (ttrs TeamTrialResultSet) Summarize(courses CourseMapper) TTUmaSummary {
 	s := TTUmaSummary{}
 	rows := make(map[int]int, 50)
 	// Iterate backwards so that the latest results are first
@@ -57,7 +71,9 @@ func (ttrs TeamTrialResultSet) Summarize() TTUmaSummary {
 			}
 
 			// Parse race scenario blob
-			scenario, _ := raceResult.DecodeScenario()
+			scenario, err := raceResult.DecodeScenario()
+			course := courses.CourseDistance(ttr.RaceStartParamsArray[round].RaceInstanceId)
+			spurtKnown := err == nil && course > 0
 			activations := scenario.SkillActivations()
 			// Skill IDs activated per uma in the race scenario
 			activationMap := make(map[int][]int, 12)
@@ -83,6 +99,8 @@ func (ttrs TeamTrialResultSet) Summarize() TTUmaSummary {
 						activations[skillId]++
 					}
 					s.SkillActivations = append(s.SkillActivations, activations)
+					s.SpurtRaces = append(s.SpurtRaces, 0)
+					s.FullSpurts = append(s.FullSpurts, 0)
 				}
 				if result := raceResult.FindCharaResults(uma.TrainedCharaId); len(result.ScoreEventArray) > 0 {
 					s.Scores[index].append(result.TotalScore())
@@ -90,6 +108,13 @@ func (ttrs TeamTrialResultSet) Summarize() TTUmaSummary {
 					skillIds := activationMap[uma.FrameOrder-1]
 					for _, skillId := range skillIds {
 						s.SkillActivations[index][skillId]++
+					}
+					horse := uma.FrameOrder - 1
+					if spurtKnown && horse >= 0 && horse < len(scenario.HorseResults) {
+						s.SpurtRaces[index]++
+						if scenario.HorseResults[horse].fullSpurt(course) {
+							s.FullSpurts[index]++
+						}
 					}
 				}
 			}

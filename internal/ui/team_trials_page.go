@@ -68,6 +68,7 @@ var (
 		races.VetRacesColumn:   {alignment: text.End},
 		races.VetMaxColumn:     {alignment: text.End},
 		races.VetAvgColumn:     {alignment: text.End},
+		races.VetSpurtColumn:   {alignment: text.End},
 	}
 	// Procs always shows four digits and Rate two decimals; Name takes the rest of the sidebar
 	skillColumns = [...]tableColumn{
@@ -151,7 +152,7 @@ type teamTrialsPage struct {
 // newTeamTrialsPage aggregates the loaded races and selects the first vet table row. It does
 // not touch the window, so it runs on the loader goroutine.
 func newTeamTrialsPage(dataStore *data.DataStore, resultSet races.TeamTrialResultSet) *teamTrialsPage {
-	summary := resultSet.Summarize()
+	summary := resultSet.Summarize(dataStore)
 	p := &teamTrialsPage{
 		summary:      summary,
 		dataStore:    dataStore,
