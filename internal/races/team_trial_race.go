@@ -11,10 +11,11 @@ type TeamTrialResultSet struct {
 	Set []TeamTrialResult
 }
 
+// TeamTrialResult is one saved team trial of 5 rounds
+//
+// Its types declare only the fields the app reads, so encoding/json skips the rest of each file
+// without allocating, and fields of other shapes, such as item_info_array, never fail a load.
 type TeamTrialResult struct {
-	UseItemIdArray       []int             `json:"use_item_id_array"`
-	ItemInfoArray        []int             `json:"item_info_array"`
-	SupportCardBonus     int               `json:"support_card_bonus"`
 	RaceStartParamsArray []RaceStartParams `json:"race_start_params_array"`
 	RaceResultArray      []RaceResult      `json:"race_result_array"`
 }
@@ -61,7 +62,7 @@ type decodedScenario struct {
 }
 
 // decodeScenarios decodes the scenario of every race in TTRS on all cores, each worker reusing
-// one ScenarioDecoder
+// one ScenarioDecoder that skips the frames Summarize never reads
 //
 // Returns:
 // - The decoded scenario of round r of result i at index i*5 + r, zero for results without 5
@@ -72,7 +73,7 @@ func (ttrs TeamTrialResultSet) decodeScenarios() []decodedScenario {
 	var workers sync.WaitGroup
 	for range runtime.GOMAXPROCS(0) {
 		workers.Go(func() {
-			var decoder ScenarioDecoder
+			decoder := ScenarioDecoder{SkipFrames: true}
 			for {
 				i := int(next.Add(1) - 1)
 				if i >= len(decoded) {

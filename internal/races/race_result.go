@@ -6,25 +6,15 @@ type RaceResult struct {
 	// Base64-encoded compressed race scenario blob
 	//
 	// Format is base64 -> gzip -> little-endian binary
-	RaceScenario   string `json:"race_scenario"`
-	Round          int    `json:"round"`
-	TeamTotalScore int    `json:"team_total_score"`
-	// Win (1) or loss (2)
-	WinType                    int           `json:"win_type"`
-	CurrentConsecutiveWinCount int           `json:"current_consecutive_win_count"`
-	BonusRateByNextWin         int           `json:"bonus_rate_by_next_win"`
-	CharaResultArray           []CharaResult `json:"chara_result_array"`
+	RaceScenario     string        `json:"race_scenario"`
+	Round            int           `json:"round"`
+	CharaResultArray []CharaResult `json:"chara_result_array"`
 }
 
 // Result of a single uma in a team trial round
 type CharaResult struct {
-	// Starting gate
-	FrameOrder     int `json:"frame_order"` // ID in the race scenario blob
 	TrainedCharaId int `json:"trained_chara_id"`
 	TeamId         int `json:"team_id"`
-	// Placing in race
-	FinishOrder int `json:"finish_order"`
-	FinishTime  int `json:"finish_time"`
 	// Scoring events earned during the race
 	ScoreEventArray []ScoreEvent `json:"score_array"`
 }
@@ -32,9 +22,8 @@ type CharaResult struct {
 type ScoreEvent struct {
 	// Type of score (lengths, placement, skills, rushed, etc.)
 	RawScoreId int `json:"raw_score_id"`
-	// Number of times the scoring event occurred
-	Num int `json:"num"`
-	// Final score value for a given scoring event. Score = BonusScores + (BaseScore * Num)
+	// Final score value for a given scoring event: its base score times the number of times it
+	// occurred, plus its bonuses
 	Score int `json:"score"`
 	// Bonuses comprising the raw score (minus base score)
 	BonusArray []ScoreBonus `json:"bonus_array"`
@@ -45,11 +34,6 @@ type ScoreBonus struct {
 	// Type of bonus score (Opponent rating, support bonus, ace bonus, streak)
 	ScoreBonusId int `json:"score_bonus_id"`
 	Score        int `json:"bonus_score"`
-	// No idea what these do
-	ConditionType   int `json:"condition_type"`
-	ConditionValue1 int `json:"condition_value_1"`
-	ConditionValue2 int `json:"condition_value_2"`
-	ScoreRate       int `json:"score_rate"`
 }
 
 // Find chara results from a single race
