@@ -53,6 +53,13 @@ const (
 	chosenVetCount
 )
 
+// Views of the histogram panel, indexing teamTrialsPage.scoreViewTabs
+const (
+	distributionView = iota
+	breakdownView
+	scoreViewCount
+)
+
 var (
 	vetColumns = [...]tableColumn{
 		races.VetIdColumn:      {alignment: text.End},
@@ -75,6 +82,15 @@ var (
 	}
 	// A role no veteran is chosen for
 	noVet = chosenVet{index: -1}
+	// Tab label and panel title of each histogram panel view
+	scoreViewNames = [scoreViewCount]string{
+		distributionView: "Distribution",
+		breakdownView:    "Breakdown",
+	}
+	scoreViewTitles = [scoreViewCount]string{
+		distributionView: "Score Distribution",
+		breakdownView:    "Score Breakdown",
+	}
 )
 
 // chosenVet is a veteran chosen in the vet table
@@ -95,12 +111,12 @@ func loadTeamTrialResults() (races.TeamTrialResultSet, error) {
 }
 
 // teamTrialsPage shows the TT veteran table beside a sidebar of the selected veteran's score
-// histogram and skill activations
+// histogram or score breakdown, and skill activations
 //
 // Clicking a row selects its veteran. Ctrl+clicking another row compares its veteran to the
-// selected one: the histogram outlines it against the selected veteran, and tabs over the skill
-// table switch between the two. Ctrl+clicking the compared row again or pressing Escape ends
-// the comparison.
+// selected one: the histogram outlines it against the selected veteran, the breakdown lists it
+// beneath, and tabs over the skill table switch between the two. Ctrl+clicking the compared row
+// again or pressing Escape ends the comparison.
 type teamTrialsPage struct {
 	summary   races.TTUmaSummary
 	dataStore *data.DataStore
@@ -110,9 +126,13 @@ type teamTrialsPage struct {
 	// filter is active
 	vetShown *races.Table[races.VetTableData]
 	// Scratch buffer of the vetTable rows in vetShown
-	vetRows        []int
-	skillTable     *races.Table[races.SkillTableData]
-	histogram      scoreHistogram
+	vetRows    []int
+	skillTable *races.Table[races.SkillTableData]
+	histogram  scoreHistogram
+	breakdown  scoreBreakdown
+	// Tabs over the histogram panel, and the view they show
+	scoreViewTabs  [scoreViewCount]widget.Clickable
+	scoreView      int
 	distanceFilter distanceFilter
 	vetView        tableView
 	skillView      tableView
@@ -138,10 +158,11 @@ func newTeamTrialsPage(dataStore *data.DataStore, resultSet races.TeamTrialResul
 		vetTable:     races.NewVetTable(dataStore, summary),
 		skillTable:   races.NewSkillTable(),
 		histogram:    newScoreHistogram(summary),
+		breakdown:    newScoreBreakdown(summary),
 		sidebarSplit: component.Resize{Axis: layout.Vertical, Ratio: histogramRatio},
 		panels: [teamTrialsPanelCount]panel{
 			vetPanel:       {title: "Veterans"},
-			histogramPanel: {title: "Score Distribution"},
+			histogramPanel: {title: scoreViewTitles[distributionView]},
 			skillPanel:     {title: "Skill Activations"},
 		},
 		chosen: [chosenVetCount]chosenVet{noVet, noVet},
@@ -243,12 +264,13 @@ func (p *teamTrialsPage) releaseHiddenVets() {
 	}
 }
 
-// showChosen shows the chosen veterans in the vet table highlights and the histogram, and the
-// skill activations of the one of role skillRole
+// showChosen shows the chosen veterans in the vet table highlights, the histogram and the
+// breakdown, and the skill activations of the one of role skillRole
 func (p *teamTrialsPage) showChosen(skillRole int) {
 	selected, compared := p.chosen[selectedVet], p.chosen[comparedVet]
 	p.markChosenRows()
 	p.histogram.show(selected.index, compared.index)
+	p.breakdown.show(selected.index, compared.index)
 	p.histogramCaption = selected.name
 	if compared.index >= 0 {
 		p.histogramCaption = selected.name + " vs " + compared.name
@@ -332,6 +354,12 @@ func (p *teamTrialsPage) update(gtx layout.Context) {
 			p.endComparison()
 		}
 	}
+	for view := range p.scoreViewTabs {
+		if p.scoreViewTabs[view].Clicked(gtx) {
+			p.scoreView = view
+			p.panels[histogramPanel].title = scoreViewTitles[view]
+		}
+	}
 	for role := range p.skillTabs {
 		if p.skillTabs[role].Clicked(gtx) && role != p.skillVet && p.chosen[role].index >= 0 {
 			p.switchSkills(role)
@@ -369,15 +397,27 @@ func (p *teamTrialsPage) layout(gtx layout.Context, theme *material.Theme) layou
 	)
 }
 
-// layoutSidebar stacks the histogram over the skill table, split by a draggable gutter, with
-// tabs over the skill table while comparing
+// layoutSidebar stacks the histogram or the breakdown, under tabs choosing between them, over
+// the skill table, split by a draggable gutter, with tabs over the skill table while comparing
 func (p *teamTrialsPage) layoutSidebar(gtx layout.Context, theme *material.Theme) layout.Dimensions {
 	p.sidebarSplit.Ratio = min(max(p.sidebarSplit.Ratio, minHistogramRatio), maxHistogramRatio)
 	return p.sidebarSplit.Layout(gtx,
 		func(gtx layout.Context) layout.Dimensions {
 			return p.layoutPanel(gtx, theme, histogramPanel, p.histogramCaption,
 				func(gtx layout.Context) layout.Dimensions {
-					return p.histogram.layout(gtx, theme)
+					return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							return layoutTableToolbar(gtx, func(gtx layout.Context) layout.Dimensions {
+								return p.layoutScoreViewTabs(gtx, theme)
+							})
+						}),
+						layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+							if p.scoreView == breakdownView {
+								return p.breakdown.layout(gtx, theme)
+							}
+							return p.histogram.layout(gtx, theme)
+						}),
+					)
 				},
 			)
 		},
@@ -471,6 +511,27 @@ func (p *teamTrialsPage) layoutSkillTabs(
 		layout.Rigid(layoutTab(selectedVet)),
 		layout.Rigid(layout.Spacer{Width: filterGap}.Layout),
 		layout.Rigid(layoutTab(comparedVet)),
+	)
+}
+
+// layoutScoreViewTabs draws a pill per histogram panel view, highlighting the shown one
+func (p *teamTrialsPage) layoutScoreViewTabs(
+	gtx layout.Context,
+	theme *material.Theme,
+) layout.Dimensions {
+	layoutTab := func(view int) layout.Widget {
+		return func(gtx layout.Context) layout.Dimensions {
+			var highlight highlightColors
+			if view == p.scoreView {
+				highlight = selectionHighlight
+			}
+			return layoutPill(gtx, theme, &p.scoreViewTabs[view], scoreViewNames[view], highlight)
+		}
+	}
+	return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
+		layout.Rigid(layoutTab(distributionView)),
+		layout.Rigid(layout.Spacer{Width: filterGap}.Layout),
+		layout.Rigid(layoutTab(breakdownView)),
 	)
 }
 

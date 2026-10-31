@@ -22,9 +22,11 @@ func (ttrs *TeamTrialResultSet) append(ttr TeamTrialResult) {
 // so that the TTRS only need to be walked once
 type TTUmaSummary struct {
 	// TrainedCharaIds is also in CharaData, but it's simpler to have a slice
-	TrainedCharaIds  []int
-	CharaData        []RaceHorseData
-	Scores           []ScoreArray
+	TrainedCharaIds []int
+	CharaData       []RaceHorseData
+	Scores          []ScoreArray
+	// Points by category summed over the races in Scores
+	ScoreBreakdowns  []ScoreBreakdown
 	DistanceTypes    []DistanceType
 	SkillActivations []map[int]int
 	// FieldedCount counts the number of umas we are fielding on our team
@@ -72,6 +74,7 @@ func (ttrs TeamTrialResultSet) Summarize() TTUmaSummary {
 					s.TrainedCharaIds = append(s.TrainedCharaIds, uma.TrainedCharaId)
 					s.CharaData = append(s.CharaData, uma)
 					s.Scores = append(s.Scores, ScoreArray{})
+					s.ScoreBreakdowns = append(s.ScoreBreakdowns, ScoreBreakdown{})
 					s.DistanceTypes = append(s.DistanceTypes, raceResult.DistanceType)
 					// Count skill activations per skill ID
 					activations := make(map[int]int)
@@ -83,6 +86,7 @@ func (ttrs TeamTrialResultSet) Summarize() TTUmaSummary {
 				}
 				if result := raceResult.FindCharaResults(uma.TrainedCharaId); len(result.ScoreEventArray) > 0 {
 					s.Scores[index].append(result.TotalScore())
+					s.ScoreBreakdowns[index].add(result.ScoreEventArray)
 					skillIds := activationMap[uma.FrameOrder-1]
 					for _, skillId := range skillIds {
 						s.SkillActivations[index][skillId]++
