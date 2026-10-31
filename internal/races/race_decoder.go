@@ -109,6 +109,9 @@ func DecodeRaceScenario(encoded string) (RaceScenario, error) {
 // cache. The zero value is ready to use. It is not safe for concurrent use, so each goroutine
 // needs its own.
 type ScenarioDecoder struct {
+	// Whether Decode leaves RaceScenario.Frames empty, skipping the bulk of the scenario that
+	// only replays read
+	SkipFrames bool
 	compressed []byte
 	source     bytes.Reader
 	inflater   gzip.Reader
@@ -134,7 +137,7 @@ func (d *ScenarioDecoder) Decode(encoded string) (RaceScenario, error) {
 	if _, err := d.inflated.ReadFrom(&d.inflater); err != nil {
 		return RaceScenario{}, fmt.Errorf("read: %w", err)
 	}
-	return parseRaceScenario(d.inflated.Bytes())
+	return parseRaceScenario(d.inflated.Bytes(), d.SkipFrames)
 }
 
 // Extracts skill activations from the event list
@@ -166,7 +169,7 @@ type scenarioReader struct {
 	err  error
 }
 
-func parseRaceScenario(data []byte) (RaceScenario, error) {
+func parseRaceScenario(data []byte, skipFrames bool) (RaceScenario, error) {
 	var scenario RaceScenario
 	r := &scenarioReader{data: data}
 
@@ -199,6 +202,10 @@ func parseRaceScenario(data []byte) (RaceScenario, error) {
 		return scenario, fmt.Errorf("implausible frame section: %d frames of %d bytes", frameCount, frameSize)
 	}
 
+	if skipFrames {
+		r.skip(frameCount * frameSize)
+		frameCount = 0
+	}
 	scenario.Frames = make([]RaceFrame, frameCount)
 	for i := range scenario.Frames {
 		frameStart := r.off
