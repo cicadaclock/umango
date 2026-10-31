@@ -7,11 +7,6 @@ temp/
 *.code-workspace
 *_debug_bin*
 
-# Written by assets/extract_assets.py
-assets/.extractor/
-assets/icons/*
-!assets/icons/.gitkeep
-
 # Builds
 umango.exe
 umango
