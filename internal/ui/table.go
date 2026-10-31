@@ -7,6 +7,7 @@ import (
 	"gioui.org/f32"
 	"gioui.org/font"
 	"gioui.org/gesture"
+	"gioui.org/io/key"
 	"gioui.org/io/pointer"
 	"gioui.org/layout"
 	"gioui.org/op"
@@ -60,9 +61,10 @@ type tableView struct {
 	rowClicks    []gesture.Click
 	rowHeight    unit.Dp
 	selectable   bool
-	selectedRow  int
-	sortColumn   int
-	sortState    races.SortState
+	// Rows highlighted as the selection and as the comparison, -1 when none
+	selectedRow, comparedRow int
+	sortColumn               int
+	sortState                races.SortState
 	// layoutIcon draws the icon of a cell, in a column with one, into the exact constraints
 	layoutIcon func(gtx layout.Context, row, col int)
 }
@@ -80,6 +82,7 @@ func newTableView(
 		rowHeight:    rowHeight,
 		selectable:   selectable,
 		selectedRow:  -1,
+		comparedRow:  -1,
 	}
 }
 
@@ -102,33 +105,39 @@ func (tv *tableView) scrollToTop() {
 	tv.grid.Vertical.First, tv.grid.Vertical.Offset = 0, 0
 }
 
-// update returns the column whose header was clicked and the row that was clicked, each -1
-// when there was no click
-func (tv *tableView) update(gtx layout.Context) (sortColumn, clickedRow int) {
+// update reports the clicks since the last frame
+//
+// Returns:
+// - sortColumn: Column whose header was clicked, -1 when none was
+// - clickedRow: Row that was clicked, -1 when none was
+// - rowModifiers: Modifier keys held during the row click
+func (tv *tableView) update(
+	gtx layout.Context,
+) (sortColumn, clickedRow int, rowModifiers key.Modifiers) {
 	sortColumn, clickedRow = -1, -1
 	for col := range tv.headerClicks {
-		if clicked(gtx, &tv.headerClicks[col]) {
+		if ok, _ := clicked(gtx, &tv.headerClicks[col]); ok {
 			sortColumn = col
 		}
 	}
 	for row := range tv.rowClicks {
-		if clicked(gtx, &tv.rowClicks[row]) {
-			clickedRow = row
+		if ok, modifiers := clicked(gtx, &tv.rowClicks[row]); ok {
+			clickedRow, rowModifiers = row, modifiers
 		}
 	}
-	return sortColumn, clickedRow
+	return sortColumn, clickedRow, rowModifiers
 }
 
-// clicked drains the click's events and reports whether any completed a click
-func clicked(gtx layout.Context, click *gesture.Click) bool {
-	result := false
+// clicked drains the click's events and reports whether any completed a click, with the
+// modifier keys held during the last one
+func clicked(gtx layout.Context, click *gesture.Click) (ok bool, modifiers key.Modifiers) {
 	for {
-		e, ok := click.Update(gtx.Source)
-		if !ok {
-			return result
+		e, more := click.Update(gtx.Source)
+		if !more {
+			return ok, modifiers
 		}
 		if e.Kind == gesture.KindClick {
-			result = true
+			ok, modifiers = true, e.Modifiers
 		}
 	}
 }
@@ -262,7 +271,7 @@ func (tv *tableView) layoutHeader(
 	return layout.Dimensions{Size: size}
 }
 
-// layoutCell draws a body cell on its row's stripe, hover or selection background
+// layoutCell draws a body cell on its row's stripe, hover, selection or comparison background
 func (tv *tableView) layoutCell(
 	gtx layout.Context,
 	theme *material.Theme,
@@ -270,10 +279,17 @@ func (tv *tableView) layoutCell(
 ) layout.Dimensions {
 	size := gtx.Constraints.Min
 	defer clip.Rect{Max: size}.Push(gtx.Ops).Pop()
-	selected := row == tv.selectedRow
+	var highlight highlightColors
+	switch row {
+	case tv.selectedRow:
+		highlight = selectionHighlight
+	case tv.comparedRow:
+		highlight = comparisonHighlight
+	}
+	highlighted := highlight != highlightColors{}
 	switch {
-	case selected:
-		paint.Fill(gtx.Ops, colorSelection)
+	case highlighted:
+		paint.Fill(gtx.Ops, highlight.fill)
 	case tv.selectable && tv.rowClicks[row].Hovered():
 		paint.Fill(gtx.Ops, colorHover)
 	case row%2 == 1:
@@ -282,8 +298,8 @@ func (tv *tableView) layoutCell(
 	if col < len(tv.headers)-1 {
 		fillRect(gtx, colorColumnRule, image.Rect(size.X-gtx.Dp(borderWidth), 0, size.X, size.Y))
 	}
-	if selected && col == 0 {
-		fillRect(gtx, colorAccent, image.Rect(0, 0, gtx.Dp(selectionBarWidth), size.Y))
+	if highlighted && col == 0 {
+		fillRect(gtx, highlight.accent, image.Rect(0, 0, gtx.Dp(selectionBarWidth), size.Y))
 	}
 	if tv.selectable {
 		tv.rowClicks[row].Add(gtx.Ops)
@@ -300,7 +316,7 @@ func (tv *tableView) layoutCell(
 	}
 
 	c := colorText
-	if selected {
+	if highlighted {
 		c = colorTextBright
 	}
 	label := textLabel(theme, textSize, tv.columns[col][row], c)

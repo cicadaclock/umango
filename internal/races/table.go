@@ -86,12 +86,18 @@ func (t *Table[T]) Less(i, j int) bool {
 // Consecutive sorts on the same column cycle through ascending, descending, and the
 // original order
 func (t *Table[T]) Sort(col int) {
+	state := Ascending
 	if col == t.sortColumn {
-		t.sortState = t.sortState.Next()
-	} else {
-		t.sortState = Ascending
+		state = t.sortState.Next()
 	}
-	t.sortColumn = col
+	t.SortBy(col, state)
+}
+
+// SortBy reorders all rows in place by the given column in the given direction
+//
+// Unsorted restores the original order.
+func (t *Table[T]) SortBy(col int, state SortState) {
+	t.sortColumn, t.sortState = col, state
 	sort.Sort(t)
 }
 

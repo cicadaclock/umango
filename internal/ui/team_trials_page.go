@@ -9,11 +9,13 @@ import (
 	"slices"
 
 	"gioui.org/f32"
+	"gioui.org/io/key"
 	"gioui.org/layout"
 	"gioui.org/op/clip"
 	"gioui.org/op/paint"
 	"gioui.org/text"
 	"gioui.org/unit"
+	"gioui.org/widget"
 	"gioui.org/widget/material"
 	"gioui.org/x/component"
 	"github.com/cicadaclock/umango/internal/data"
@@ -44,6 +46,13 @@ const (
 	teamTrialsPanelCount
 )
 
+// Roles of the veterans chosen in the vet table, indexing teamTrialsPage.chosen
+const (
+	selectedVet = iota
+	comparedVet
+	chosenVetCount
+)
+
 var (
 	vetColumns = [...]tableColumn{
 		races.VetIdColumn:      {alignment: text.End},
@@ -59,7 +68,22 @@ var (
 		races.SkillProcsColumn: {sample: "0000", alignment: text.End},
 		races.SkillRateColumn:  {sample: "0.00", alignment: text.End},
 	}
+	// Highlights of the skill tabs of the chosen veterans, by role
+	skillTabHighlights = [chosenVetCount]highlightColors{
+		selectedVet: selectionHighlight,
+		comparedVet: comparisonHighlight,
+	}
+	// A role no veteran is chosen for
+	noVet = chosenVet{index: -1}
 )
+
+// chosenVet is a veteran chosen in the vet table
+type chosenVet struct {
+	// Summary index, -1 when no veteran is chosen
+	index int
+	id    int
+	name  string
+}
 
 // loadTeamTrialResults loads the saved team trial races from the game's default save directory
 func loadTeamTrialResults() (races.TeamTrialResultSet, error) {
@@ -72,6 +96,11 @@ func loadTeamTrialResults() (races.TeamTrialResultSet, error) {
 
 // teamTrialsPage shows the TT veteran table beside a sidebar of the selected veteran's score
 // histogram and skill activations
+//
+// Clicking a row selects its veteran. Ctrl+clicking another row compares its veteran to the
+// selected one: the histogram outlines it against the selected veteran, and tabs over the skill
+// table switch between the two. Ctrl+clicking the compared row again or pressing Escape ends
+// the comparison.
 type teamTrialsPage struct {
 	summary   races.TTUmaSummary
 	dataStore *data.DataStore
@@ -90,11 +119,13 @@ type teamTrialsPage struct {
 	sidebarSplit   component.Resize
 	panels         [teamTrialsPanelCount]panel
 	focus          int
-	// Panel captions, formatted when the rows or the selection change
-	vetCount, selectedName, selectedRaces string
-	// Summary index of the selected veteran, -1 when none is selected
-	selectedIndex int
-	selectedId    int
+	chosen         [chosenVetCount]chosenVet
+	// Tabs over the skill table while comparing, by role
+	skillTabs [chosenVetCount]widget.Clickable
+	// Role of the chosen veteran whose skills the skill table shows
+	skillVet int
+	// Panel captions, formatted when the rows or the chosen veterans change
+	vetCount, histogramCaption, skillCaption string
 }
 
 // newTeamTrialsPage aggregates the loaded races and selects the first vet table row. It does
@@ -113,21 +144,21 @@ func newTeamTrialsPage(dataStore *data.DataStore, resultSet races.TeamTrialResul
 			histogramPanel: {title: "Score Distribution"},
 			skillPanel:     {title: "Skill Activations"},
 		},
-		selectedIndex: -1,
+		chosen: [chosenVetCount]chosenVet{noVet, noVet},
 	}
 	p.vetView = newTableView(p.vetTable.Headers(), vetColumns[:], vetRowHeight, true)
 	p.vetView.layoutIcon = p.layoutFieldedMark
 	p.showVetRows()
 	p.skillView = newTableView(p.skillTable.Headers(), skillColumns[:], skillRowHeight, false)
-	p.skillView.setColumns(p.skillTable.Columns())
+	p.syncSkillView()
 	if p.vetShown.Len() > 0 {
 		p.selectRow(0)
 	}
 	return p
 }
 
-// showVetRows shows the vetTable rows that pass the distance filter, keeping the selected
-// veteran highlighted when it is among them
+// showVetRows shows the vetTable rows that pass the distance filter, keeping the chosen
+// veterans highlighted when they are among them
 func (p *teamTrialsPage) showVetRows() {
 	p.vetShown = p.vetTable
 	p.vetCount = fmt.Sprintf("%d veterans", p.vetTable.Len())
@@ -142,27 +173,115 @@ func (p *teamTrialsPage) showVetRows() {
 		p.vetCount = fmt.Sprintf("%d of %d veterans", p.vetShown.Len(), p.vetTable.Len())
 	}
 	p.vetView.setColumns(p.vetShown.Columns())
-	p.vetView.selectedRow = slices.Index(p.vetShown.Data().TrainedCharaIds, p.selectedId)
+	p.markChosenRows()
 }
 
-// selectRow shows the histogram and skill activations of the veteran in the shown vet table row
-func (p *teamTrialsPage) selectRow(row int) {
+// markChosenRows highlights the shown vet table rows of the chosen veterans
+func (p *teamTrialsPage) markChosenRows() {
+	p.vetView.selectedRow = p.shownRow(selectedVet)
+	p.vetView.comparedRow = p.shownRow(comparedVet)
+}
+
+// shownRow returns the shown vet table row of the chosen veteran of role, -1 when none is
+// chosen or the distance filter hides it
+func (p *teamTrialsPage) shownRow(role int) int {
+	if p.chosen[role].index < 0 {
+		return -1
+	}
+	return slices.Index(p.vetShown.Data().TrainedCharaIds, p.chosen[role].id)
+}
+
+// rowVet returns the veteran in the shown vet table row
+func (p *teamTrialsPage) rowVet(row int) chosenVet {
 	shown := p.vetShown.Data()
-	p.selectedId = shown.GetTrainedCharaId(row)
-	p.selectedIndex = slices.Index(p.summary.TrainedCharaIds, p.selectedId)
-	p.selectedName = shown.Names[row]
-	raceCount := p.summary.Scores[p.selectedIndex].Len()
-	p.selectedRaces = formatRaceCount(raceCount)
-	p.vetView.selectedRow = row
-	races.RefillSkillTable(
-		p.skillTable,
-		p.dataStore,
-		p.summary.SkillActivations[p.selectedIndex],
-		raceCount,
-	)
+	id := shown.GetTrainedCharaId(row)
+	return chosenVet{
+		index: slices.Index(p.summary.TrainedCharaIds, id),
+		id:    id,
+		name:  shown.Names[row],
+	}
+}
+
+// selectRow selects the veteran in the shown vet table row, ending a comparison with itself
+func (p *teamTrialsPage) selectRow(row int) {
+	p.chosen[selectedVet] = p.rowVet(row)
+	if p.chosen[comparedVet].index == p.chosen[selectedVet].index {
+		p.chosen[comparedVet] = noVet
+	}
+	p.showChosen(selectedVet)
+}
+
+// compareRow compares the veteran in the shown vet table row to the selected one, or ends the
+// comparison when it is already compared
+func (p *teamTrialsPage) compareRow(row int) {
+	vet := p.rowVet(row)
+	switch vet.index {
+	case p.chosen[selectedVet].index:
+		// A veteran is not compared to itself
+	case p.chosen[comparedVet].index:
+		p.endComparison()
+	default:
+		p.chosen[comparedVet] = vet
+		p.showChosen(comparedVet)
+	}
+}
+
+// endComparison returns to showing the selected veteran alone
+func (p *teamTrialsPage) endComparison() {
+	p.chosen[comparedVet] = noVet
+	p.showChosen(selectedVet)
+}
+
+// releaseHiddenVets ends a comparison with a veteran the distance filter hides, and gives a
+// hidden selected veteran's place to the first shown one
+func (p *teamTrialsPage) releaseHiddenVets() {
+	if p.chosen[comparedVet].index >= 0 && p.vetView.comparedRow < 0 {
+		p.endComparison()
+	}
+	if p.vetView.selectedRow < 0 && p.vetShown.Len() > 0 {
+		p.selectRow(0)
+	}
+}
+
+// showChosen shows the chosen veterans in the vet table highlights and the histogram, and the
+// skill activations of the one of role skillRole
+func (p *teamTrialsPage) showChosen(skillRole int) {
+	selected, compared := p.chosen[selectedVet], p.chosen[comparedVet]
+	p.markChosenRows()
+	p.histogram.show(selected.index, compared.index)
+	p.histogramCaption = selected.name
+	if compared.index >= 0 {
+		p.histogramCaption = selected.name + " vs " + compared.name
+	}
+	p.showSkills(skillRole)
+	p.syncSkillView()
+	p.skillView.scrollToTop()
+}
+
+// showSkills fills the skill table, in its original order, with the skill activations of the
+// chosen veteran of role
+func (p *teamTrialsPage) showSkills(role int) {
+	index := p.chosen[role].index
+	raceCount := p.summary.Scores[index].Len()
+	p.skillVet = role
+	p.skillCaption = formatRaceCount(raceCount)
+	races.RefillSkillTable(p.skillTable, p.dataStore, p.summary.SkillActivations[index], raceCount)
+}
+
+// switchSkills shows the skill activations of the chosen veteran of role in the skill table's
+// current sort
+func (p *teamTrialsPage) switchSkills(role int) {
+	col, state := p.skillTable.SortedColumn()
+	p.showSkills(role)
+	p.skillTable.SortBy(col, state)
+	p.syncSkillView()
+	p.skillView.scrollToTop()
+}
+
+// syncSkillView renders the skill table's rows and sort state into the skill view
+func (p *teamTrialsPage) syncSkillView() {
 	p.skillView.setColumns(p.skillTable.Columns())
 	p.skillView.sortColumn, p.skillView.sortState = p.skillTable.SortedColumn()
-	p.skillView.scrollToTop()
 }
 
 // layoutFieldedMark draws the check mark of a fielded veteran's row in the Fielded column, the
@@ -186,8 +305,12 @@ func drawCheckMark(gtx layout.Context, c color.NRGBA) {
 
 func (p *teamTrialsPage) update(gtx layout.Context) {
 	p.focus = focusPanel(gtx, p.panels[:], p.focus)
-	sortColumn, row := p.vetView.update(gtx)
-	if row >= 0 {
+	sortColumn, row, modifiers := p.vetView.update(gtx)
+	switch {
+	case row < 0:
+	case modifiers.Contain(key.ModShortcut):
+		p.compareRow(row)
+	default:
 		p.selectRow(row)
 	}
 	if sortColumn >= 0 {
@@ -198,15 +321,25 @@ func (p *teamTrialsPage) update(gtx layout.Context) {
 	if p.distanceFilter.update(gtx) {
 		p.showVetRows()
 		p.vetView.scrollToTop()
-		// A veteran the filter hides gives way to the first shown one
-		if p.vetView.selectedRow < 0 && p.vetShown.Len() > 0 {
-			p.selectRow(0)
+		p.releaseHiddenVets()
+	}
+	for {
+		e, ok := gtx.Event(key.Filter{Name: key.NameEscape})
+		if !ok {
+			break
+		}
+		if e, ok := e.(key.Event); ok && e.State == key.Press && p.chosen[comparedVet].index >= 0 {
+			p.endComparison()
 		}
 	}
-	if sortColumn, _ := p.skillView.update(gtx); sortColumn >= 0 {
+	for role := range p.skillTabs {
+		if p.skillTabs[role].Clicked(gtx) && role != p.skillVet && p.chosen[role].index >= 0 {
+			p.switchSkills(role)
+		}
+	}
+	if sortColumn, _, _ := p.skillView.update(gtx); sortColumn >= 0 {
 		p.skillTable.Sort(sortColumn)
-		p.skillView.sortColumn, p.skillView.sortState = p.skillTable.SortedColumn()
-		p.skillView.columns = p.skillTable.Columns()
+		p.syncSkillView()
 	}
 }
 
@@ -218,7 +351,9 @@ func (p *teamTrialsPage) layout(gtx layout.Context, theme *material.Theme) layou
 			return p.layoutPanel(gtx, theme, vetPanel, "", func(gtx layout.Context) layout.Dimensions {
 				return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						return p.layoutVetToolbar(gtx, theme)
+						return layoutTableToolbar(gtx, func(gtx layout.Context) layout.Dimensions {
+							return p.layoutVetToolbar(gtx, theme)
+						})
 					}),
 					layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 						return p.vetView.layout(gtx, theme)
@@ -234,21 +369,34 @@ func (p *teamTrialsPage) layout(gtx layout.Context, theme *material.Theme) layou
 	)
 }
 
-// layoutSidebar stacks the histogram over the skill table, split by a draggable gutter
+// layoutSidebar stacks the histogram over the skill table, split by a draggable gutter, with
+// tabs over the skill table while comparing
 func (p *teamTrialsPage) layoutSidebar(gtx layout.Context, theme *material.Theme) layout.Dimensions {
 	p.sidebarSplit.Ratio = min(max(p.sidebarSplit.Ratio, minHistogramRatio), maxHistogramRatio)
 	return p.sidebarSplit.Layout(gtx,
 		func(gtx layout.Context) layout.Dimensions {
-			return p.layoutPanel(gtx, theme, histogramPanel, p.selectedName,
+			return p.layoutPanel(gtx, theme, histogramPanel, p.histogramCaption,
 				func(gtx layout.Context) layout.Dimensions {
-					return p.histogram.layout(gtx, theme, p.selectedIndex)
+					return p.histogram.layout(gtx, theme)
 				},
 			)
 		},
 		func(gtx layout.Context) layout.Dimensions {
-			return p.layoutPanel(gtx, theme, skillPanel, p.selectedRaces,
+			return p.layoutPanel(gtx, theme, skillPanel, p.skillCaption,
 				func(gtx layout.Context) layout.Dimensions {
-					return p.skillView.layout(gtx, theme)
+					if p.chosen[comparedVet].index < 0 {
+						return p.skillView.layout(gtx, theme)
+					}
+					return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							return layoutTableToolbar(gtx, func(gtx layout.Context) layout.Dimensions {
+								return p.layoutSkillTabs(gtx, theme)
+							})
+						}),
+						layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+							return p.skillView.layout(gtx, theme)
+						}),
+					)
 				},
 			)
 		},
@@ -266,35 +414,64 @@ func (p *teamTrialsPage) layoutPanel(
 	return p.panels[index].layout(gtx, theme, p.focus == index, detail, body)
 }
 
-// layoutVetToolbar draws the distance filter and the shown veteran count above the vet table
-func (p *teamTrialsPage) layoutVetToolbar(
-	gtx layout.Context,
-	theme *material.Theme,
-) layout.Dimensions {
+// layoutTableToolbar draws content in a padded strip across the constraints, ruled off from the
+// table below it
+func layoutTableToolbar(gtx layout.Context, content layout.Widget) layout.Dimensions {
 	inset := layout.Inset{
 		Top:    toolbarPadding,
 		Bottom: toolbarPadding,
 		Left:   tableCellPadding,
 		Right:  tableCellPadding,
 	}
-	dims := inset.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
-			layout.Rigid(textLabel(theme, smallTextSize, distanceFilterLabel, colorTextMuted).Layout),
-			layout.Rigid(layout.Spacer{Width: toolbarLabelGap}.Layout),
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return p.distanceFilter.layout(gtx, theme)
-			}),
-			layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-				label := textLabel(theme, smallTextSize, p.vetCount, colorTextMuted)
-				label.Alignment = text.End
-				gtx.Constraints.Min.X = gtx.Constraints.Max.X
-				return label.Layout(gtx)
-			}),
-		)
-	})
+	dims := inset.Layout(gtx, content)
+	dims.Size.X = gtx.Constraints.Max.X
 	line := gtx.Dp(borderWidth)
 	fillRect(gtx, colorBorder, image.Rect(0, dims.Size.Y-line, dims.Size.X, dims.Size.Y))
 	return dims
+}
+
+// layoutVetToolbar draws the distance filter and the shown veteran count
+func (p *teamTrialsPage) layoutVetToolbar(
+	gtx layout.Context,
+	theme *material.Theme,
+) layout.Dimensions {
+	return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
+		layout.Rigid(textLabel(theme, smallTextSize, distanceFilterLabel, colorTextMuted).Layout),
+		layout.Rigid(layout.Spacer{Width: toolbarLabelGap}.Layout),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return p.distanceFilter.layout(gtx, theme)
+		}),
+		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+			label := textLabel(theme, smallTextSize, p.vetCount, colorTextMuted)
+			label.Alignment = text.End
+			gtx.Constraints.Min.X = gtx.Constraints.Max.X
+			return label.Layout(gtx)
+		}),
+	)
+}
+
+// layoutSkillTabs draws a pill named for each chosen veteran, at most half the width each, that
+// shows its skills in the skill table, highlighted in its veteran's color while active
+func (p *teamTrialsPage) layoutSkillTabs(
+	gtx layout.Context,
+	theme *material.Theme,
+) layout.Dimensions {
+	tabWidth := max((gtx.Constraints.Max.X-gtx.Dp(filterGap))/2, 0)
+	layoutTab := func(role int) layout.Widget {
+		return func(gtx layout.Context) layout.Dimensions {
+			gtx.Constraints.Max.X = tabWidth
+			var highlight highlightColors
+			if role == p.skillVet {
+				highlight = skillTabHighlights[role]
+			}
+			return layoutPill(gtx, theme, &p.skillTabs[role], p.chosen[role].name, highlight)
+		}
+	}
+	return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
+		layout.Rigid(layoutTab(selectedVet)),
+		layout.Rigid(layout.Spacer{Width: filterGap}.Layout),
+		layout.Rigid(layoutTab(comparedVet)),
+	)
 }
 
 // layoutSplitHandle draws the gutter between the stacked sidebar panels, with a grip at its

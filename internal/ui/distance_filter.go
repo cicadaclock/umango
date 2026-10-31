@@ -47,8 +47,12 @@ func (f *distanceFilter) layout(gtx layout.Context, theme *material.Theme) layou
 	gap := gtx.Dp(filterGap)
 	var size image.Point
 	for distance := range races.DistanceTypeIter() {
+		var highlight highlightColors
+		if distance == f.selected {
+			highlight = selectionHighlight
+		}
 		offset := op.Offset(image.Pt(size.X, 0)).Push(gtx.Ops)
-		dims := layoutPill(gtx, theme, &f.buttons[distance], distance.String(), distance == f.selected)
+		dims := layoutPill(gtx, theme, &f.buttons[distance], distance.String(), highlight)
 		offset.Pop()
 		size.X += dims.Size.X + gap
 		size.Y = max(size.Y, dims.Size.Y)

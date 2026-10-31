@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"image"
+	"image/color"
 	"math"
 	"slices"
 	"strconv"
@@ -24,9 +25,12 @@ const (
 	scoreBucketWidth  = 5000
 	scoreRangePadding = 10000
 	maxAxisIntervals  = 8
+	// Shares of races are counted in tenths of a percent, so share axes reuse the integer axis
+	permillePerPercent = 10
 
 	scoreAxisTitle   = "Score"
 	countAxisTitle   = "Frequency"
+	shareAxisTitle   = "Share of Races"
 	plotMarginLeft   = unit.Dp(56)
 	plotMarginRight  = unit.Dp(20)
 	plotMarginTop    = unit.Dp(20)
@@ -34,9 +38,12 @@ const (
 	tickLength       = unit.Dp(4)
 	barGap           = unit.Dp(1)
 	barRadius        = unit.Dp(2)
+	outlineWidth     = unit.Dp(2)
 	tooltipPaddingX  = unit.Dp(8)
 	tooltipPaddingY  = unit.Dp(6)
 	tooltipLift      = unit.Dp(6)
+	swatchSize       = unit.Dp(8)
+	swatchGap        = unit.Dp(6)
 	// Distance from the left edge to the center of the vertical axis title
 	countTitleCenter = unit.Dp(14)
 	// Distance from the bottom edge to the bottom of the horizontal axis title
@@ -95,6 +102,14 @@ func formatThousands(v int) string {
 	return strconv.Itoa(v/1000) + "k"
 }
 
+// formatPermille writes a share in tenths of a percent as a percentage, as "12.5%"
+func formatPermille(v int) string {
+	if v%permillePerPercent == 0 {
+		return strconv.Itoa(v/permillePerPercent) + "%"
+	}
+	return strconv.FormatFloat(float64(v)/permillePerPercent, 'f', 1, 64) + "%"
+}
+
 // offset maps v to pixels along an axis drawn length pixels long
 func (a histogramAxis) offset(v, length int) int {
 	return v * length / a.span
@@ -110,28 +125,48 @@ func (a histogramAxis) labelStride(length, labelSize int) int {
 	return max(1, (labelSize+tickSpacing-1)/tickSpacing)
 }
 
-// scoreHistogram holds the score buckets of every summarized veteran on axes shared by all of
-// them, so bar heights stay comparable when switching veterans
+// scoreHistogram draws the score buckets of the selected veteran, alone or against a compared
+// veteran, on a score axis shared by every summarized veteran
+//
+// A lone veteran's bars count races on an axis shared by every veteran, so bar heights stay
+// comparable when switching veterans. While comparing, the selected veteran's bars and the
+// compared veteran's stepped outline give shares of their own races on an axis fitted to the
+// pair, so veterans with different race counts compare fairly.
 type scoreHistogram struct {
-	// Bucket lower bounds and frequencies by summary index
+	// Bucket lower bounds, frequencies, and frequencies in tenths of a percent of the veteran's
+	// races, by summary index
 	bucketScores [][]int
 	bucketCounts [][]int
+	bucketShares [][]int
 	scoreAxis    histogramAxis
 	countAxis    histogramAxis
+	// Fitted to the compared pair by show
+	shareAxis histogramAxis
+	// Summary indices of the selected and the compared veteran, -1 when none
+	selected, compared int
 	// Pointer position in the histogram, meaningful while hovering the plot
 	pointer  f32.Point
 	hovering bool
-	// Tooltip lines of the bucket starting at tooltipScore of the veteran at tooltipIndex,
-	// formatted again only when the pointer reaches another bucket
-	tooltipIndex, tooltipScore                int
-	tooltipCount, tooltipRange, tooltipChance string
+	// Tooltip lines of the bucket and veterans at tooltipKey, formatted again only when the
+	// pointer reaches another bucket or other veterans are shown
+	tooltipKey   tooltipKey
+	tooltipLines [3]string
+}
+
+// tooltipKey identifies the bucket a tooltip describes and the veterans it describes
+type tooltipKey struct {
+	selected, compared, score int
 }
 
 func newScoreHistogram(summary races.TTUmaSummary) scoreHistogram {
 	h := scoreHistogram{
 		bucketScores: make([][]int, summary.Len()),
 		bucketCounts: make([][]int, summary.Len()),
-		tooltipIndex: -1,
+		bucketShares: make([][]int, summary.Len()),
+		selected:     -1,
+		compared:     -1,
+		// No bucket starts below zero, so no tooltip matches until the first is formatted
+		tooltipKey: tooltipKey{score: -1},
 	}
 	maxScore, maxCount := 0, 0
 	for i, scores := range summary.Scores {
@@ -139,12 +174,39 @@ func newScoreHistogram(summary races.TTUmaSummary) scoreHistogram {
 			continue
 		}
 		h.bucketScores[i], h.bucketCounts[i] = scores.HistogramCoords(scoreBucketWidth)
+		h.bucketShares[i] = make([]int, len(h.bucketCounts[i]))
+		for bucket, count := range h.bucketCounts[i] {
+			h.bucketShares[i][bucket] = count * 100 * permillePerPercent / scores.Len()
+		}
 		maxScore = max(maxScore, scores.Max())
 		maxCount = max(maxCount, slices.Max(h.bucketCounts[i]))
 	}
 	h.scoreAxis = newHistogramAxis(maxScore+scoreRangePadding, formatThousands)
 	h.countAxis = newHistogramAxis(maxCount+1, strconv.Itoa)
 	return h
+}
+
+// show sets the veterans to draw, fitting the share axis to a compared pair
+//
+// Inputs:
+// - selected: Summary index of the veteran whose bars to draw, -1 to draw only the axes
+// - compared: Summary index of the veteran to outline against selected, -1 for none
+func (h *scoreHistogram) show(selected, compared int) {
+	h.selected, h.compared = selected, compared
+	if compared < 0 {
+		return
+	}
+	maxShare := max(slices.Max(h.bucketShares[selected]), slices.Max(h.bucketShares[compared]))
+	h.shareAxis = newHistogramAxis(maxShare+permillePerPercent, formatPermille)
+}
+
+// heights returns the bar heights by summary index and the axis they rise along: race counts
+// for a lone veteran, and shares of races while comparing
+func (h *scoreHistogram) heights() ([][]int, *histogramAxis) {
+	if h.compared >= 0 {
+		return h.bucketShares, &h.shareAxis
+	}
+	return h.bucketCounts, &h.countAxis
 }
 
 // update tracks the pointer over the plot
@@ -164,13 +226,9 @@ func (h *scoreHistogram) update(gtx layout.Context) {
 	}
 }
 
-// layout draws the axes and the buckets of the veteran at summary index, or only the axes
-// when index is negative, with a readout of the bucket under the pointer
-func (h *scoreHistogram) layout(
-	gtx layout.Context,
-	theme *material.Theme,
-	index int,
-) layout.Dimensions {
+// layout draws the axes and the shown veterans' buckets, or only the axes when no veteran is
+// selected, with a readout of the bucket under the pointer
+func (h *scoreHistogram) layout(gtx layout.Context, theme *material.Theme) layout.Dimensions {
 	h.update(gtx)
 	size := gtx.Constraints.Max
 	plot := image.Rect(
@@ -182,32 +240,32 @@ func (h *scoreHistogram) layout(
 	}
 	gtx.Constraints.Min = image.Point{}
 
-	hovered := -1
-	if index >= 0 {
-		hovered = h.hoveredBucket(plot, index)
-	}
+	hovered := h.hoveredScore(plot)
 	if hovered >= 0 {
-		bar := h.barRect(plot, index, hovered)
-		fillRect(gtx, colorHoverColumn, image.Rect(bar.Min.X, plot.Min.Y, bar.Max.X, plot.Max.Y))
+		fillRect(gtx, colorHoverColumn, h.columnRect(plot, hovered))
 	}
 
+	_, heightAxis := h.heights()
 	line, tick := gtx.Dp(borderWidth), gtx.Dp(tickLength)
 	// The last label is the widest, and every label is as tall as any other
 	widestLabel := measureLabel(gtx, axisLabel(theme, h.scoreAxis.labels[len(h.scoreAxis.labels)-1]))
-	countStride := h.countAxis.labelStride(plot.Dy(), 2*widestLabel.Y)
-	for i, count := range h.countAxis.ticks {
-		if i%countStride != 0 {
+	heightStride := heightAxis.labelStride(plot.Dy(), 2*widestLabel.Y)
+	for i, height := range heightAxis.ticks {
+		if i%heightStride != 0 {
 			continue
 		}
-		y := plot.Max.Y - h.countAxis.offset(count, plot.Dy())
-		if count > 0 {
+		y := plot.Max.Y - heightAxis.offset(height, plot.Dy())
+		if height > 0 {
 			fillRect(gtx, colorGridLine, image.Rect(plot.Min.X, y, plot.Max.X, y+line))
 		}
-		drawLabel(gtx, axisLabel(theme, h.countAxis.labels[i]), image.Pt(plot.Min.X-2*tick, y), 1, 0.5)
+		drawLabel(gtx, axisLabel(theme, heightAxis.labels[i]), image.Pt(plot.Min.X-2*tick, y), 1, 0.5)
 	}
 
-	if index >= 0 {
-		h.drawBars(gtx, plot, index, hovered)
+	if h.selected >= 0 {
+		h.drawBars(gtx, plot, hovered)
+	}
+	if h.compared >= 0 {
+		h.drawOutline(gtx, plot)
 	}
 
 	fillRect(gtx, colorBorderStrong, image.Rect(plot.Min.X, plot.Max.Y, plot.Max.X, plot.Max.Y+line))
@@ -221,10 +279,14 @@ func (h *scoreHistogram) layout(
 	}
 	scoreTitle := image.Pt((plot.Min.X+plot.Max.X)/2, size.Y-gtx.Dp(scoreTitleInset))
 	drawLabel(gtx, axisTitle(theme, scoreAxisTitle), scoreTitle, 0.5, 1)
+	heightTitle := countAxisTitle
+	if h.compared >= 0 {
+		heightTitle = shareAxisTitle
+	}
 	countTitle := image.Pt(gtx.Dp(countTitleCenter), (plot.Min.Y+plot.Max.Y)/2)
-	drawVerticalLabel(gtx, axisTitle(theme, countAxisTitle), countTitle)
+	drawVerticalLabel(gtx, axisTitle(theme, heightTitle), countTitle)
 	if hovered >= 0 {
-		h.drawTooltip(gtx, theme, plot, index, hovered)
+		h.drawTooltip(gtx, theme, plot, hovered)
 	}
 
 	area := clip.Rect(plot).Push(gtx.Ops)
@@ -233,35 +295,55 @@ func (h *scoreHistogram) layout(
 	return layout.Dimensions{Size: size}
 }
 
-// hoveredBucket returns the position among the veteran's buckets of the one under the pointer,
-// or -1 when the pointer is not over a bar's column
-func (h *scoreHistogram) hoveredBucket(plot image.Rectangle, index int) int {
-	if !h.hovering {
+// hoveredScore returns the lower bound of the bucket under the pointer when a shown veteran has
+// races in it, or -1
+func (h *scoreHistogram) hoveredScore(plot image.Rectangle) int {
+	if !h.hovering || h.selected < 0 {
 		return -1
 	}
 	score := int(h.pointer.X-float32(plot.Min.X)) * h.scoreAxis.span / plot.Dx()
-	return slices.Index(h.bucketScores[index], score/scoreBucketWidth*scoreBucketWidth)
+	score = score / scoreBucketWidth * scoreBucketWidth
+	if _, found := h.bucketAt(h.selected, score); found {
+		return score
+	}
+	if h.compared >= 0 {
+		if _, found := h.bucketAt(h.compared, score); found {
+			return score
+		}
+	}
+	return -1
+}
+
+// bucketAt returns the position among the buckets of the veteran at summary index of the one
+// starting at score, and whether the veteran has races there
+func (h *scoreHistogram) bucketAt(index, score int) (int, bool) {
+	return slices.BinarySearch(h.bucketScores[index], score)
+}
+
+// columnRect returns the full height plot column over the bucket starting at score
+func (h *scoreHistogram) columnRect(plot image.Rectangle, score int) image.Rectangle {
+	return image.Rect(
+		plot.Min.X+h.scoreAxis.offset(score, plot.Dx()), plot.Min.Y,
+		plot.Min.X+h.scoreAxis.offset(score+scoreBucketWidth, plot.Dx()), plot.Max.Y,
+	)
 }
 
 // barRect returns the plot area of the veteran's bucket at position bucket
 func (h *scoreHistogram) barRect(plot image.Rectangle, index, bucket int) image.Rectangle {
-	score := h.bucketScores[index][bucket]
-	return image.Rect(
-		plot.Min.X+h.scoreAxis.offset(score, plot.Dx()),
-		plot.Max.Y-h.countAxis.offset(h.bucketCounts[index][bucket], plot.Dy()),
-		plot.Min.X+h.scoreAxis.offset(score+scoreBucketWidth, plot.Dx()),
-		plot.Max.Y,
-	)
+	heights, axis := h.heights()
+	bar := h.columnRect(plot, h.bucketScores[index][bucket])
+	bar.Min.Y = plot.Max.Y - axis.offset(heights[index][bucket], plot.Dy())
+	return bar
 }
 
-// drawBars fills the veteran's buckets as one path shaded by a gradient down the plot, then
-// fills the hovered bar, when not negative, in the bright accent
-func (h *scoreHistogram) drawBars(gtx layout.Context, plot image.Rectangle, index, hovered int) {
+// drawBars fills the selected veteran's buckets as one path shaded by a gradient down the plot,
+// then fills its bar in the bucket starting at hovered, if any, in the bright accent
+func (h *scoreHistogram) drawBars(gtx layout.Context, plot image.Rectangle, hovered int) {
 	gap, radius := float32(gtx.Dp(barGap)), float32(gtx.Dp(barRadius))
 	var path clip.Path
 	path.Begin(gtx.Ops)
-	for bucket := range h.bucketScores[index] {
-		appendBar(&path, h.barRect(plot, index, bucket), gap, radius)
+	for bucket := range h.bucketScores[h.selected] {
+		appendBar(&path, h.barRect(plot, h.selected, bucket), gap, radius)
 	}
 	bars := clip.Outline{Path: path.End()}.Op().Push(gtx.Ops)
 	paint.LinearGradientOp{
@@ -272,11 +354,12 @@ func (h *scoreHistogram) drawBars(gtx layout.Context, plot image.Rectangle, inde
 	}.Add(gtx.Ops)
 	paint.PaintOp{}.Add(gtx.Ops)
 	bars.Pop()
-	if hovered < 0 {
+	bucket, found := h.bucketAt(h.selected, hovered)
+	if !found {
 		return
 	}
 	path.Begin(gtx.Ops)
-	appendBar(&path, h.barRect(plot, index, hovered), gap, radius)
+	appendBar(&path, h.barRect(plot, h.selected, bucket), gap, radius)
 	paint.FillShape(gtx.Ops, colorAccentBright, clip.Outline{Path: path.End()}.Op())
 }
 
@@ -295,38 +378,82 @@ func appendBar(path *clip.Path, bar image.Rectangle, gap, radius float32) {
 	path.Close()
 }
 
-// drawTooltip draws the race count and score range of the veteran's bucket at position bucket,
-// and the chance of the veteran scoring at least its lower bound, in a box above its bar, kept
-// within the plot's width
+// drawOutline traces the compared veteran's buckets in the compare color as a stepped line that
+// drops to the baseline wherever its buckets break off
+//
+// The line's segments are all horizontal or vertical, so they are filled as pixel aligned
+// rectangles, which stay crisp where a stroke would antialias and can leak coverage.
+func (h *scoreHistogram) drawOutline(gtx layout.Context, plot image.Rectangle) {
+	width := gtx.Dp(outlineWidth)
+	center := image.Pt(width/2, width/2)
+	segment := func(from, to image.Point) {
+		r := image.Rectangle{Min: from, Max: to}.Canon()
+		fillRect(gtx, colorCompare, image.Rectangle{
+			Min: r.Min.Sub(center),
+			Max: r.Max.Sub(center).Add(image.Pt(width, width)),
+		})
+	}
+	scores := h.bucketScores[h.compared]
+	edgeTop := plot.Max.Y
+	for bucket, score := range scores {
+		bar := h.barRect(plot, h.compared, bucket)
+		if bucket > 0 && scores[bucket-1] != score-scoreBucketWidth {
+			edgeTop = plot.Max.Y
+		}
+		segment(image.Pt(bar.Min.X, edgeTop), bar.Min)
+		segment(bar.Min, image.Pt(bar.Max.X, bar.Min.Y))
+		edgeTop = bar.Min.Y
+		if bucket == len(scores)-1 || scores[bucket+1] != score+scoreBucketWidth {
+			segment(image.Pt(bar.Max.X, bar.Min.Y), bar.Max)
+		}
+	}
+}
+
+// drawTooltip describes the bucket starting at score in a box above its tallest bar, kept within
+// the plot's width
+//
+// A lone veteran's box gives its race count in the bucket, the score range, and its chance of
+// scoring at least the bucket's lower bound. A compared pair's box gives the score range over a
+// line per veteran, keyed by a swatch of its color, with its count, share and chance.
 func (h *scoreHistogram) drawTooltip(
 	gtx layout.Context,
 	theme *material.Theme,
 	plot image.Rectangle,
-	index, bucket int,
+	score int,
 ) {
-	score := h.bucketScores[index][bucket]
-	if index != h.tooltipIndex || score != h.tooltipScore {
-		h.tooltipIndex, h.tooltipScore = index, score
-		h.tooltipCount = formatRaceCount(h.bucketCounts[index][bucket])
-		h.tooltipRange = formatThousands(score) + " – " + formatThousands(score+scoreBucketWidth)
-		h.tooltipChance = formatScoreChance(h.bucketScores[index], h.bucketCounts[index], score)
+	if key := (tooltipKey{h.selected, h.compared, score}); key != h.tooltipKey {
+		h.tooltipKey = key
+		h.formatTooltip(score)
 	}
-	count := textLabel(theme, smallTextSize, h.tooltipCount, colorText)
-	count.Font.Weight = font.SemiBold
+	var swatches [2]color.NRGBA
+	if h.compared >= 0 {
+		swatches = [2]color.NRGBA{colorAccent, colorCompare}
+	}
+	title := textLabel(theme, smallTextSize, h.tooltipLines[0], colorText)
+	title.Font.Weight = font.SemiBold
 	macro := op.Record(gtx.Ops)
 	textDims := layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-		layout.Rigid(count.Layout),
-		layout.Rigid(axisLabel(theme, h.tooltipRange).Layout),
-		layout.Rigid(axisLabel(theme, h.tooltipChance).Layout),
+		layout.Rigid(title.Layout),
+		layout.Rigid(tooltipLine(theme, h.tooltipLines[1], swatches[0])),
+		layout.Rigid(tooltipLine(theme, h.tooltipLines[2], swatches[1])),
 	)
 	text := macro.Stop()
 
+	top := plot.Max.Y
+	for _, index := range [...]int{h.selected, h.compared} {
+		if index < 0 {
+			continue
+		}
+		if bucket, found := h.bucketAt(index, score); found {
+			top = min(top, h.barRect(plot, index, bucket).Min.Y)
+		}
+	}
 	paddingX, paddingY := gtx.Dp(tooltipPaddingX), gtx.Dp(tooltipPaddingY)
 	box := image.Rectangle{Max: textDims.Size.Add(image.Pt(2*paddingX, 2*paddingY))}
-	bar := h.barRect(plot, index, bucket)
+	column := h.columnRect(plot, score)
 	origin := image.Pt(
-		min(max((bar.Min.X+bar.Max.X-box.Dx())/2, plot.Min.X), plot.Max.X-box.Dx()),
-		max(bar.Min.Y-gtx.Dp(tooltipLift)-box.Dy(), 0),
+		min(max((column.Min.X+column.Max.X-box.Dx())/2, plot.Min.X), plot.Max.X-box.Dx()),
+		max(top-gtx.Dp(tooltipLift)-box.Dy(), 0),
 	)
 	defer op.Offset(origin).Push(gtx.Ops).Pop()
 	radius := gtx.Dp(controlRadius)
@@ -334,6 +461,70 @@ func (h *scoreHistogram) drawTooltip(
 	strokeRRect(gtx, colorBorderStrong, box, radius)
 	defer op.Offset(image.Pt(paddingX, paddingY)).Push(gtx.Ops).Pop()
 	text.Add(gtx.Ops)
+}
+
+// tooltipLine returns a widget drawing s as a line of tooltip text, led by a swatch of the color
+// swatch unless it is transparent
+func tooltipLine(theme *material.Theme, s string, swatch color.NRGBA) layout.Widget {
+	label := axisLabel(theme, s)
+	if swatch.A == 0 {
+		return label.Layout
+	}
+	return func(gtx layout.Context) layout.Dimensions {
+		return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				side := gtx.Dp(swatchSize)
+				square := image.Rectangle{Max: image.Pt(side, side)}
+				paint.FillShape(gtx.Ops, swatch, clip.UniformRRect(square, gtx.Dp(barRadius)).Op(gtx.Ops))
+				return layout.Dimensions{Size: square.Max}
+			}),
+			layout.Rigid(layout.Spacer{Width: swatchGap}.Layout),
+			layout.Rigid(label.Layout),
+		)
+	}
+}
+
+// formatTooltip formats the tooltip lines describing the bucket starting at score
+func (h *scoreHistogram) formatTooltip(score int) {
+	scoreRange := formatThousands(score) + " – " + formatThousands(score+scoreBucketWidth)
+	if h.compared < 0 {
+		inBucket, atLeast, total := h.bucketStats(h.selected, score)
+		h.tooltipLines = [3]string{
+			formatRaceCount(inBucket), scoreRange, formatScoreChance(atLeast, total, score),
+		}
+		return
+	}
+	h.tooltipLines = [3]string{
+		scoreRange, h.formatBucketShare(h.selected, score), h.formatBucketShare(h.compared, score),
+	}
+}
+
+// formatBucketShare writes the races of the veteran at summary index in the bucket starting at
+// score, as a count and a share of its races, beside its chance of scoring at least score, as
+// "3 races (12.5%) · 34.2% at ≥ 70k"
+func (h *scoreHistogram) formatBucketShare(index, score int) string {
+	inBucket, atLeast, total := h.bucketStats(index, score)
+	return fmt.Sprintf("%s (%.1f%%) · %s",
+		formatRaceCount(inBucket),
+		100*float64(inBucket)/float64(total),
+		formatScoreChance(atLeast, total, score),
+	)
+}
+
+// bucketStats counts the races of the veteran at summary index that scored in the bucket
+// starting at score, that scored at least score, and in total
+func (h *scoreHistogram) bucketStats(index, score int) (inBucket, atLeast, total int) {
+	for bucket, count := range h.bucketCounts[index] {
+		bucketScore := h.bucketScores[index][bucket]
+		total += count
+		if bucketScore >= score {
+			atLeast += count
+		}
+		if bucketScore == score {
+			inBucket = count
+		}
+	}
+	return inBucket, atLeast, total
 }
 
 // formatRaceCount writes count as a number of races
@@ -344,16 +535,9 @@ func formatRaceCount(count int) string {
 	return fmt.Sprintf("%d races", count)
 }
 
-// formatScoreChance writes the share of a veteran's races, bucketed into bucketScores and
-// bucketCounts, that scored at least score, as "34.2% at ≥ 70k"
-func formatScoreChance(bucketScores, bucketCounts []int, score int) string {
-	atLeast, total := 0, 0
-	for i, count := range bucketCounts {
-		total += count
-		if bucketScores[i] >= score {
-			atLeast += count
-		}
-	}
+// formatScoreChance writes the share of total races that scored at least score, atLeast of them,
+// as "34.2% at ≥ 70k"
+func formatScoreChance(atLeast, total, score int) string {
 	return fmt.Sprintf("%.1f%% at ≥ %s", 100*float64(atLeast)/float64(total), formatThousands(score))
 }
 

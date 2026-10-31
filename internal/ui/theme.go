@@ -57,6 +57,22 @@ var (
 	colorAccentBright = rgb(0xffa066)
 	colorSelection    = rgb(0x3d2316)
 	colorError        = rgb(0xff5c5c)
+	// A cool blue set against the orange accent marks the veteran compared to the selected one
+	colorCompare          = rgb(0x4ea8ff)
+	colorCompareSelection = rgb(0x1f2e3f)
+)
+
+// highlightColors tint an active control or a chosen table row; the zero value highlights nothing
+type highlightColors struct {
+	// Background of the highlighted item
+	fill color.NRGBA
+	// Stronger color of its outline or edge marker
+	accent color.NRGBA
+}
+
+var (
+	selectionHighlight  = highlightColors{fill: colorSelection, accent: colorAccent}
+	comparisonHighlight = highlightColors{fill: colorCompareSelection, accent: colorCompare}
 )
 
 // rgb converts a 0xRRGGBB literal to an opaque color
@@ -119,14 +135,15 @@ func strokeRRect(gtx layout.Context, c color.NRGBA, r image.Rectangle, radius in
 }
 
 // layoutPill draws label in an outlined capsule that shows button's hovered and pressed states,
-// or an accent fill and outline while active
+// or is filled and outlined in highlight while active, that is while highlight is not zero
 func layoutPill(
 	gtx layout.Context,
 	theme *material.Theme,
 	button *widget.Clickable,
 	label string,
-	active bool,
+	highlight highlightColors,
 ) layout.Dimensions {
+	active := highlight != highlightColors{}
 	return button.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		c := colorTextMuted
 		if active || button.Hovered() {
@@ -134,6 +151,7 @@ func layoutPill(
 		}
 		padding := image.Pt(gtx.Dp(pillPaddingX), gtx.Dp(pillPaddingY))
 		gtx.Constraints.Min = image.Point{}
+		gtx.Constraints.Max.X = max(gtx.Constraints.Max.X-2*padding.X, 0)
 		macro := op.Record(gtx.Ops)
 		offset := op.Offset(padding).Push(gtx.Ops)
 		dims := textLabel(theme, smallTextSize, label, c).Layout(gtx)
@@ -145,8 +163,8 @@ func layoutPill(
 		border := colorBorderStrong
 		switch {
 		case active:
-			paint.FillShape(gtx.Ops, colorSelection, clip.UniformRRect(bounds, radius).Op(gtx.Ops))
-			border = colorAccent
+			paint.FillShape(gtx.Ops, highlight.fill, clip.UniformRRect(bounds, radius).Op(gtx.Ops))
+			border = highlight.accent
 		case button.Pressed():
 			paint.FillShape(gtx.Ops, colorPressed, clip.UniformRRect(bounds, radius).Op(gtx.Ops))
 		case button.Hovered():
