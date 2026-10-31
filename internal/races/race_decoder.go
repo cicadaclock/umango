@@ -2,12 +2,12 @@ package races
 
 import (
 	"bytes"
-	"compress/gzip"
 	"encoding/base64"
 	"encoding/binary"
 	"fmt"
-	"io"
 	"math"
+
+	"github.com/klauspost/compress/gzip"
 )
 
 // Go implementation of github.com/ayaliz/hakuraku RaceDataParser
@@ -100,20 +100,41 @@ type SkillActivation struct {
 
 // Decodes a raw race_scenario string
 func DecodeRaceScenario(encoded string) (RaceScenario, error) {
-	var scenario RaceScenario
-	compressed, err := base64.StdEncoding.DecodeString(encoded)
+	var decoder ScenarioDecoder
+	return decoder.Decode(encoded)
+}
+
+// ScenarioDecoder decodes raw race_scenario strings, keeping its buffers and inflater from one
+// call to the next so that repeated decodes neither allocate them again nor leave the core's
+// cache. The zero value is ready to use. It is not safe for concurrent use, so each goroutine
+// needs its own.
+type ScenarioDecoder struct {
+	compressed []byte
+	source     bytes.Reader
+	inflater   gzip.Reader
+	inflated   bytes.Buffer
+}
+
+// Decode decodes a raw race_scenario string
+//
+// Returns:
+// - scenario: The decoded scenario, which shares no memory with the decoder
+// - err: Failure decoding the base64, inflating the gzip stream or parsing the scenario
+func (d *ScenarioDecoder) Decode(encoded string) (RaceScenario, error) {
+	var err error
+	d.compressed, err = base64.StdEncoding.AppendDecode(d.compressed[:0], []byte(encoded))
 	if err != nil {
-		return scenario, fmt.Errorf("base64 decode: %w", err)
+		return RaceScenario{}, fmt.Errorf("base64 decode: %w", err)
 	}
-	gz, err := gzip.NewReader(bytes.NewReader(compressed))
-	if err != nil {
-		return scenario, fmt.Errorf("gzip: %w", err)
+	d.source.Reset(d.compressed)
+	if err := d.inflater.Reset(&d.source); err != nil {
+		return RaceScenario{}, fmt.Errorf("gzip: %w", err)
 	}
-	data, err := io.ReadAll(gz)
-	if err != nil {
-		return scenario, fmt.Errorf("read: %w", err)
+	d.inflated.Reset()
+	if _, err := d.inflated.ReadFrom(&d.inflater); err != nil {
+		return RaceScenario{}, fmt.Errorf("read: %w", err)
 	}
-	return parseRaceScenario(data)
+	return parseRaceScenario(d.inflated.Bytes())
 }
 
 // Extracts skill activations from the event list

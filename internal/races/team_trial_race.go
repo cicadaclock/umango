@@ -1,6 +1,11 @@
 package races
 
-import "slices"
+import (
+	"runtime"
+	"slices"
+	"sync"
+	"sync/atomic"
+)
 
 type TeamTrialResultSet struct {
 	Set []TeamTrialResult
@@ -48,17 +53,57 @@ type CourseMapper interface {
 	CourseDistance(raceInstanceId int) int
 }
 
-// Summarize walks TTRS once, collecting anything needed into the TTUmaSummary
+// decodedScenario holds the parts of a race's scenario that Summarize reads
+type decodedScenario struct {
+	horseResults []HorseResult
+	activations  []SkillActivation
+	err          error
+}
+
+// decodeScenarios decodes the scenario of every race in TTRS on all cores, each worker reusing
+// one ScenarioDecoder
+//
+// Returns:
+// - The decoded scenario of round r of result i at index i*5 + r, zero for results without 5
+// races
+func (ttrs TeamTrialResultSet) decodeScenarios() []decodedScenario {
+	decoded := make([]decodedScenario, 5*len(ttrs.Set))
+	var next atomic.Int64
+	var workers sync.WaitGroup
+	for range runtime.GOMAXPROCS(0) {
+		workers.Go(func() {
+			var decoder ScenarioDecoder
+			for {
+				i := int(next.Add(1) - 1)
+				if i >= len(decoded) {
+					return
+				}
+				ttr := &ttrs.Set[i/5]
+				if !ttr.hasCorrectRaceCount() {
+					continue
+				}
+				scenario, err := decoder.Decode(ttr.RaceResultArray[i%5].RaceScenario)
+				decoded[i] = decodedScenario{scenario.HorseResults, scenario.SkillActivations(), err}
+			}
+		})
+	}
+	workers.Wait()
+	return decoded
+}
+
+// Summarize decodes the scenario of every race on all cores, then walks TTRS once, collecting
+// anything needed into the TTUmaSummary
 //
 // Inputs:
 // - courses: Course lengths, which judge whether each uma's last spurt started on time
 func (ttrs TeamTrialResultSet) Summarize(courses CourseMapper) TTUmaSummary {
 	s := TTUmaSummary{}
 	rows := make(map[int]int, 50)
+	decoded := ttrs.decodeScenarios()
 	// Iterate backwards so that the latest results are first
 	// This is needed to figure out the currently used umas
 	newest := true
-	for _, ttr := range slices.Backward(ttrs.Set) {
+	for set, ttr := range slices.Backward(ttrs.Set) {
 		if !ttr.hasCorrectRaceCount() {
 			continue
 		}
@@ -70,14 +115,12 @@ func (ttrs TeamTrialResultSet) Summarize(courses CourseMapper) TTUmaSummary {
 				s.FieldedCount += len(umas)
 			}
 
-			// Parse race scenario blob
-			scenario, err := raceResult.DecodeScenario()
+			scenario := &decoded[set*5+round]
 			course := courses.CourseDistance(ttr.RaceStartParamsArray[round].RaceInstanceId)
-			spurtKnown := err == nil && course > 0
-			activations := scenario.SkillActivations()
+			spurtKnown := scenario.err == nil && course > 0
 			// Skill IDs activated per uma in the race scenario
 			activationMap := make(map[int][]int, 12)
-			for _, activation := range activations {
+			for _, activation := range scenario.activations {
 				activationMap[activation.HorseIndex] = append(activationMap[activation.HorseIndex], activation.SkillId)
 			}
 
@@ -110,9 +153,9 @@ func (ttrs TeamTrialResultSet) Summarize(courses CourseMapper) TTUmaSummary {
 						s.SkillActivations[index][skillId]++
 					}
 					horse := uma.FrameOrder - 1
-					if spurtKnown && horse >= 0 && horse < len(scenario.HorseResults) {
+					if spurtKnown && horse >= 0 && horse < len(scenario.horseResults) {
 						s.SpurtRaces[index]++
-						if scenario.HorseResults[horse].fullSpurt(course) {
+						if scenario.horseResults[horse].fullSpurt(course) {
 							s.FullSpurts[index]++
 						}
 					}

@@ -8,6 +8,7 @@ require (
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/go-text/typesetting v0.3.5
 	github.com/ichiban/soa v0.1.2
+	github.com/klauspost/compress v1.19.1
 	github.com/tc-hib/winres v0.3.1
 	golang.org/x/sync v0.23.0
 	modernc.org/sqlite v1.60.1
