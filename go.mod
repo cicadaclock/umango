@@ -5,6 +5,7 @@ go 1.26.0
 require (
 	gioui.org v0.10.3
 	gioui.org/x v0.10.3
+	github.com/fsnotify/fsnotify v1.9.0
 	github.com/go-text/typesetting v0.3.5
 	github.com/ichiban/soa v0.1.2
 	github.com/tc-hib/winres v0.3.1

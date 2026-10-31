@@ -103,12 +103,40 @@ type chosenVet struct {
 }
 
 // loadTeamTrialResults loads the saved team trial races from the game's default save directory
-func loadTeamTrialResults() (races.TeamTrialResultSet, error) {
+//
+// Returns:
+// - dir: The save directory, which watchTeamTrialResults watches for new races
+// - resultSet: The races of every valid results file in dir
+// - err: Failure finding the home directory or walking dir
+func loadTeamTrialResults() (dir string, resultSet races.TeamTrialResultSet, err error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return races.TeamTrialResultSet{}, fmt.Errorf("get home dir: %w", err)
+		return "", resultSet, fmt.Errorf("get home dir: %w", err)
 	}
-	return races.LoadRacesFolder(filepath.Join(home, "Documents", "Saved races", "Team trials"))
+	dir = filepath.Join(home, "Documents", "Saved races", "Team trials")
+	resultSet, err = races.LoadRacesFolder(dir)
+	return dir, resultSet, err
+}
+
+// teamTrialsData holds everything the TT page derives from the saved races. It is built off the
+// window goroutine, at load and at each reload.
+type teamTrialsData struct {
+	summary races.TTUmaSummary
+	// All veterans, sorted by the clicked vet table header
+	vetTable  *races.Table[races.VetTableData]
+	histogram scoreHistogram
+	breakdown scoreBreakdown
+}
+
+// newTeamTrialsData aggregates the loaded races into the TT page's tables and charts
+func newTeamTrialsData(dataStore *data.DataStore, resultSet races.TeamTrialResultSet) teamTrialsData {
+	summary := resultSet.Summarize(dataStore)
+	return teamTrialsData{
+		summary:   summary,
+		vetTable:  races.NewVetTable(dataStore, summary),
+		histogram: newScoreHistogram(summary),
+		breakdown: newScoreBreakdown(summary),
+	}
 }
 
 // teamTrialsPage shows the TT veteran table beside a sidebar of the selected veteran's score
@@ -119,18 +147,14 @@ func loadTeamTrialResults() (races.TeamTrialResultSet, error) {
 // beneath, and tabs over the skill table switch between the two. Ctrl+clicking the compared row
 // again or pressing Escape ends the comparison.
 type teamTrialsPage struct {
-	summary   races.TTUmaSummary
+	teamTrialsData
 	dataStore *data.DataStore
-	// All veterans, sorted by the clicked vet table header
-	vetTable *races.Table[races.VetTableData]
 	// The vetTable rows that pass distanceFilter, in vetTable's order; vetTable itself when no
 	// filter is active
 	vetShown *races.Table[races.VetTableData]
 	// Scratch buffer of the vetTable rows in vetShown
 	vetRows    []int
 	skillTable *races.Table[races.SkillTableData]
-	histogram  scoreHistogram
-	breakdown  scoreBreakdown
 	// Tabs over the histogram panel, and the view they show
 	scoreViewTabs  [scoreViewCount]widget.Clickable
 	scoreView      int
@@ -152,15 +176,11 @@ type teamTrialsPage struct {
 // newTeamTrialsPage aggregates the loaded races and selects the first vet table row. It does
 // not touch the window, so it runs on the loader goroutine.
 func newTeamTrialsPage(dataStore *data.DataStore, resultSet races.TeamTrialResultSet) *teamTrialsPage {
-	summary := resultSet.Summarize(dataStore)
 	p := &teamTrialsPage{
-		summary:      summary,
-		dataStore:    dataStore,
-		vetTable:     races.NewVetTable(dataStore, summary),
-		skillTable:   races.NewSkillTable(),
-		histogram:    newScoreHistogram(summary),
-		breakdown:    newScoreBreakdown(summary),
-		sidebarSplit: component.Resize{Axis: layout.Vertical, Ratio: histogramRatio},
+		teamTrialsData: newTeamTrialsData(dataStore, resultSet),
+		dataStore:      dataStore,
+		skillTable:     races.NewSkillTable(),
+		sidebarSplit:   component.Resize{Axis: layout.Vertical, Ratio: histogramRatio},
 		panels: [teamTrialsPanelCount]panel{
 			vetPanel:       {title: "Veterans"},
 			histogramPanel: {title: scoreViewTitles[distributionView]},
@@ -177,6 +197,39 @@ func newTeamTrialsPage(dataStore *data.DataStore, resultSet races.TeamTrialResul
 		p.selectRow(0)
 	}
 	return p
+}
+
+// applyData replaces the page's data with races loaded again, keeping the chosen veterans that
+// remain, the sorts, the distance filter, the views and the scroll positions
+func (p *teamTrialsPage) applyData(loaded teamTrialsData) {
+	vetColumn, vetState := p.vetTable.SortedColumn()
+	skillColumn, skillState := p.skillTable.SortedColumn()
+	skillPosition := p.skillView.grid.Vertical
+	breakdownPosition := p.breakdown.list.Position
+	p.teamTrialsData = loaded
+	p.breakdown.list.Position = breakdownPosition
+	p.vetTable.SortBy(vetColumn, vetState)
+	// New rows can hold wider values, so the columns fit again at the next layout
+	p.vetView.widths = nil
+	for role := range p.chosen {
+		if p.chosen[role].index >= 0 {
+			p.chosen[role].index = slices.Index(p.summary.TrainedCharaIds, p.chosen[role].id)
+		}
+	}
+	p.showVetRows()
+	switch {
+	case p.chosen[selectedVet].index >= 0:
+		role := p.skillVet
+		if p.chosen[role].index < 0 {
+			role = selectedVet
+		}
+		p.showChosen(role)
+	case p.vetShown.Len() > 0:
+		p.selectRow(0)
+	}
+	p.skillTable.SortBy(skillColumn, skillState)
+	p.syncSkillView()
+	p.skillView.grid.Vertical = skillPosition
 }
 
 // showVetRows shows the vetTable rows that pass the distance filter, keeping the chosen

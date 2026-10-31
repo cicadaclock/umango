@@ -148,6 +148,8 @@ type loadResult struct {
 	shaper     *text.Shaper
 	dataStore  *data.DataStore
 	teamTrials *teamTrialsPage
+	// Directory the saved races loaded from
+	resultsDir string
 	err        error
 }
 
@@ -160,7 +162,7 @@ func load(fontData []byte) loadResult {
 	var g errgroup.Group
 	g.Go(func() (err error) { result.shaper, err = newShaper(fontData, true); return })
 	g.Go(func() (err error) { result.dataStore, err = data.Init(); return })
-	g.Go(func() (err error) { resultSet, err = loadTeamTrialResults(); return })
+	g.Go(func() (err error) { result.resultsDir, resultSet, err = loadTeamTrialResults(); return })
 	if err := g.Wait(); err != nil {
 		return loadResult{err: err}
 	}
@@ -178,6 +180,8 @@ type screen struct {
 	activeTab  int
 	teamTrials *teamTrialsPage
 	veterans   *veteranPage
+	// Reloads of the TT page's data from the results watcher, at most one waiting
+	reloads chan teamTrialsData
 }
 
 // run drives the window event loop until the window closes
@@ -188,7 +192,12 @@ func run(fontData []byte, shaper *text.Shaper) error {
 		app.Size(windowWidth, windowHeight),
 		app.MinSize(minWindowWidth, minWindowHeight),
 	)
-	s := screen{theme: newTheme(shaper), window: &window, explorer: explorer.NewExplorer(&window)}
+	s := screen{
+		theme:    newTheme(shaper),
+		window:   &window,
+		explorer: explorer.NewExplorer(&window),
+		reloads:  make(chan teamTrialsData, 1),
+	}
 
 	loads := make(chan loadResult, 1)
 	go func() {
@@ -207,6 +216,8 @@ func run(fontData []byte, shaper *text.Shaper) error {
 			select {
 			case result := <-loads:
 				s.applyLoad(result)
+			case loaded := <-s.reloads:
+				s.teamTrials.applyData(loaded)
 			default:
 			}
 			gtx := app.NewContext(&ops, e)
@@ -216,7 +227,8 @@ func run(fontData []byte, shaper *text.Shaper) error {
 	}
 }
 
-// applyLoad installs the background load results, or its error message on failure
+// applyLoad installs the background load results and starts watching for new races, or shows
+// the load's error message on failure
 func (s *screen) applyLoad(result loadResult) {
 	if result.err != nil {
 		log.Printf("load data: %v", result.err)
@@ -226,6 +238,18 @@ func (s *screen) applyLoad(result loadResult) {
 	s.theme.Shaper = result.shaper
 	s.teamTrials = result.teamTrials
 	s.veterans = newVeteranPage(result.dataStore)
+	go watchTeamTrialResults(result.resultsDir, result.dataStore, s.deliverReload)
+}
+
+// deliverReload hands the window goroutine a reload of the TT page's data, replacing one it has
+// not applied yet, and wakes it to apply it
+func (s *screen) deliverReload(loaded teamTrialsData) {
+	select {
+	case <-s.reloads:
+	default:
+	}
+	s.reloads <- loaded
+	s.window.Invalidate()
 }
 
 func (s *screen) layout(gtx layout.Context) layout.Dimensions {
