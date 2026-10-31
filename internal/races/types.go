@@ -2,12 +2,7 @@ package races
 
 import "iter"
 
-// I couldn't find these types in the master.mdb, presumably because they are
-// calculated at runtime, so we define them here
-
-// DistanceType represents the TT race type, including surface
-//
-// i.e. Dirts are miles, but are shown as dirt, so that's a unique DistanceType
+// DistanceType is the team trial category of a round, numbered as in the result files
 type DistanceType int
 
 const (
@@ -19,6 +14,7 @@ const (
 	Dirt
 )
 
+// RunStyle is the running style of an uma, numbered as in the result files
 type RunStyle int
 
 const (
@@ -29,6 +25,7 @@ const (
 	End
 )
 
+// DistanceTypeIter yields each distance type in display order
 func DistanceTypeIter() iter.Seq[DistanceType] {
 	distances := []DistanceType{Sprint, Mile, Medium, Long, Dirt}
 	return func(yield func(DistanceType) bool) {
@@ -40,6 +37,7 @@ func DistanceTypeIter() iter.Seq[DistanceType] {
 	}
 }
 
+// RunStyleIter yields each running style in display order
 func RunStyleIter() iter.Seq[RunStyle] {
 	runStyles := []RunStyle{Front, Pace, Late, End}
 	return func(yield func(RunStyle) bool) {
@@ -51,6 +49,7 @@ func RunStyleIter() iter.Seq[RunStyle] {
 	}
 }
 
+// String returns the display name of the distance type
 func (dt DistanceType) String() string {
 	switch dt {
 	case Sprint:
@@ -67,6 +66,7 @@ func (dt DistanceType) String() string {
 	return "n/a"
 }
 
+// String returns the display name of the running style
 func (rs RunStyle) String() string {
 	switch rs {
 	case Front:

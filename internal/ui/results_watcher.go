@@ -10,15 +10,12 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
-// Quiet time after the last change to a saved race before the races load again, so a file still
-// being written loads once complete
+// resultsSettleDelay is the quiet time after the last file change before the results reload,
+// so a file still being written reloads once it is complete
 const resultsSettleDelay = time.Second
 
-// watchTeamTrialResults loads the team trial races in dir again whenever a race file there
-// changes, once dir has been quiet for resultsSettleDelay, and passes each load to deliver
-//
-// It runs on its own goroutine for the life of the app. Failures to start watching or to load
-// are logged; a failed load leaves the page as it was until the next change.
+// watchTeamTrialResults reloads the team trial results in dir after each change to a result
+// file and passes each reload to deliver. A failed reload is logged and the page keeps its data.
 func watchTeamTrialResults(dir string, dataStore *data.DataStore, deliver func(teamTrialsData)) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {

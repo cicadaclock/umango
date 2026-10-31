@@ -23,22 +23,14 @@ const (
 	panelRadius     = unit.Dp(6)
 )
 
-// panel is a docked pane: a tab holding its title rises from the top left of a rounded body, and
-// one outline traces both, in the accent color while the panel has focus
-//
-// The panel's address tags the presses inside it, which focusPanel turns into focus.
+// panel is a docked pane: a title tab above a rounded body, outlined in the accent color while
+// focused. The panel's address tags the pointer presses inside it.
 type panel struct {
 	title string
 }
 
-// focusPanel moves focus to the last of panels pressed since the previous frame
-//
-// Inputs:
-// - panels: Panels laid out in the previous frame
-// - focus: Index of the focused panel
-//
-// Returns:
-// - Index of the panel that has focus after the presses
+// focusPanel returns the index of the last panel pressed since the previous frame, or focus
+// when none was pressed
 func focusPanel(gtx layout.Context, panels []panel, focus int) int {
 	for i := range panels {
 		for {
@@ -51,7 +43,7 @@ func focusPanel(gtx layout.Context, panels []panel, focus int) int {
 	return focus
 }
 
-// layout fills the constraints with the panel, drawing detail in muted text at the far end of the
+// layout fills the constraints with the panel, with detail in muted text at the right of the
 // tab strip and body inside the outline
 func (pn *panel) layout(
 	gtx layout.Context,
@@ -106,11 +98,8 @@ func (pn *panel) layout(
 	return layout.Dimensions{Size: size}
 }
 
-// drawPanelOutline fills the panel shape, a tab of size tab rising from the top left of a body
-// that fills the rest of size, and strokes its outline in border
-//
-// The body's top edge occupies the last borderWidth of the tab strip, so the body proper starts
-// at y = tab.Y.
+// drawPanelOutline fills the panel shape, a tab of size tab above a body that fills size, and
+// strokes its outline
 func drawPanelOutline(gtx layout.Context, size, tab image.Point, border color.NRGBA) {
 	width := float32(gtx.Dp(borderWidth))
 	radius := float32(gtx.Dp(panelRadius))

@@ -4,6 +4,7 @@ import (
 	"testing"
 )
 
+// TestLoadRaceResultsForEmptyPath checks that an empty path returns an error
 func TestLoadRaceResultsForEmptyPath(t *testing.T) {
 	_, err := LoadRaces("")
 	if err == nil {

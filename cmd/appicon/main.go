@@ -1,7 +1,5 @@
-// Command appicon renders the Umango emblem at the Windows icon sizes and writes them as the
-// application icon resource that go build links into the Windows executable.
-//
-// go generate runs it from the repository root; run it again whenever the emblem changes.
+// Command appicon writes the Windows application icon resource of the Umango executable.
+// go generate runs it from the repository root.
 package main
 
 import (
@@ -16,13 +14,13 @@ import (
 	"github.com/tc-hib/winres"
 )
 
+// resourcePath is the object file that go build links into the Windows executable
 const resourcePath = "rsrc_windows_amd64.syso"
 
-// Gio's Windows backend loads the window and taskbar icon from this resource ID
+// iconResourceID is the resource ID from which the Gio Windows backend loads the window icon
 const iconResourceID = 1
 
-// Sizes Windows picks from across display scales for the title bar, taskbar, Alt+Tab and
-// Explorer, ascending to the 256px maximum of the icon format
+// iconSizes lists the icon sizes in pixels from which Windows selects at each display scale
 var iconSizes = [...]int{16, 20, 24, 32, 40, 48, 64, 256}
 
 func main() {
@@ -31,6 +29,7 @@ func main() {
 	}
 }
 
+// writeIconResource renders the icon images and writes them to resourcePath
 func writeIconResource() error {
 	images, err := renderIconImages()
 	if err != nil {
@@ -55,8 +54,8 @@ func writeIconResource() error {
 	return file.Close()
 }
 
-// renderIconImages draws the emblem at every icon size down one column of a single canvas and
-// returns a view of each
+// renderIconImages renders the emblem at each icon size into one column of a single canvas
+// and returns one subimage per size
 func renderIconImages() ([]image.Image, error) {
 	width, height := iconSizes[len(iconSizes)-1], 0
 	for _, size := range iconSizes {

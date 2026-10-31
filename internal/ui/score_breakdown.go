@@ -23,11 +23,10 @@ const (
 	breakdownRowPadding   = unit.Dp(4)
 	breakdownBarThickness = unit.Dp(8)
 	breakdownColumnGap    = unit.Dp(8)
-	// Widest average points and share a column must fit
+	// Widest average points and share that the value columns must fit
 	breakdownPointsSample = "00000"
 	breakdownShareSample  = "00.0%"
-	// Share of a veteran's score, in percent, that a category must reach for some veteran to be
-	// listed
+	// Percent of a veteran's score that a category must reach in some veteran to be listed
 	minListedSharePercent = 1
 )
 
@@ -37,29 +36,25 @@ var (
 		selectedVet: colorAccent,
 		comparedVet: colorCompare,
 	}
-	// Categories the breakdown leaves out whatever their share
+	// Categories that the breakdown never lists
 	unlistedCategories = [...]races.ScoreCategory{races.MarginScore, races.LongShotScore}
 )
 
-// scoreBreakdown lists the points per race the selected veteran, and the compared one beneath
-// it, earn on average in each score category, as bars beside the points and their share of the
-// veteran's average score, from the selected veteran's largest share to its smallest
-//
-// Categories in unlistedCategories or below minListedSharePercent of every veteran's score are
-// left out. Bars share one scale across both veterans, and penalties draw in the error color.
+// scoreBreakdown lists the average points per race in each score category of the selected
+// veteran, and of the compared veteran beneath it, with their share of the average score
 type scoreBreakdown struct {
 	// Points by category and race scores, by summary index
 	breakdowns []races.ScoreBreakdown
 	scores     []races.ScoreArray
-	// Categories listed, in display order
+	// Listed categories in display order
 	categories []races.ScoreCategory
 	// Summary indices of the shown veterans by role, -1 when none
 	shown [chosenVetCount]int
-	// Average points per race by role and category, and their labels
+	// Average points per race by role and category, and their text
 	averages [chosenVetCount][races.ScoreCategoryCount]float64
 	points   [chosenVetCount][races.ScoreCategoryCount]string
 	shares   [chosenVetCount][races.ScoreCategoryCount]string
-	// Largest average magnitude shown, the points a full bar stands for
+	// Largest average magnitude shown, which a full bar length represents
 	fullBar float64
 	list    widget.List
 	// Column widths in pixels, measured at fitMetric
@@ -67,6 +62,7 @@ type scoreBreakdown struct {
 	labelWidth, pointsWidth, shareWidth int
 }
 
+// newScoreBreakdown selects the categories to list from the breakdowns of every veteran
 func newScoreBreakdown(summary races.TTUmaSummary) scoreBreakdown {
 	var listed [races.ScoreCategoryCount]bool
 	for i, breakdown := range summary.ScoreBreakdowns {
@@ -97,16 +93,11 @@ func newScoreBreakdown(summary races.TTUmaSummary) scoreBreakdown {
 	}
 }
 
-// show sets the veterans to list, orders the categories by the selected veteran's points and
-// formats their averages
-//
-// Inputs:
-// - selected: Summary index of the veteran on each row's first line, -1 to list nothing
-// - compared: Summary index of the veteran on each row's second line, -1 for none
+// show sets the veterans to list, orders the categories by the points of the selected
+// veteran, and formats the averages
 func (b *scoreBreakdown) show(selected, compared int) {
 	b.shown = [chosenVetCount]int{selected, compared}
 	if selected >= 0 {
-		// Points order the categories as shares do, since both share the veteran's score
 		breakdown := &b.breakdowns[selected]
 		slices.SortFunc(b.categories, func(x, y races.ScoreCategory) int {
 			return cmp.Or(cmp.Compare(breakdown[y], breakdown[x]), cmp.Compare(x, y))
@@ -132,6 +123,7 @@ func (b *scoreBreakdown) show(selected, compared int) {
 	}
 }
 
+// layout draws one row per listed category in a scrolling list
 func (b *scoreBreakdown) layout(gtx layout.Context, theme *material.Theme) layout.Dimensions {
 	if b.shown[selectedVet] < 0 {
 		return layout.Dimensions{Size: gtx.Constraints.Max}
@@ -148,8 +140,8 @@ func (b *scoreBreakdown) layout(gtx layout.Context, theme *material.Theme) layou
 	})
 }
 
-// fitColumns sizes the name column to the widest listed category name, and the value columns to
-// their samples, at gtx's metric
+// fitColumns sizes the name column to the widest category name and the value columns to
+// their samples
 func (b *scoreBreakdown) fitColumns(gtx layout.Context, theme *material.Theme) {
 	gtx.Constraints = layout.Constraints{Max: image.Pt(math.MaxInt32, math.MaxInt32)}
 	b.fitMetric = gtx.Metric
@@ -162,7 +154,7 @@ func (b *scoreBreakdown) fitColumns(gtx layout.Context, theme *material.Theme) {
 	b.shareWidth = measureLabel(gtx, textLabel(theme, smallTextSize, breakdownShareSample, colorText)).X
 }
 
-// layoutRow draws category's name beside a line per shown veteran of its bar, average points
+// layoutRow draws a category name beside one line per shown veteran of bar, average points
 // and share
 func (b *scoreBreakdown) layoutRow(
 	gtx layout.Context,

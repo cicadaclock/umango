@@ -26,28 +26,23 @@ const (
 	sortArrowHeight   = unit.Dp(4)
 	sortArrowGap      = unit.Dp(5)
 	selectionBarWidth = unit.Dp(2)
-	// Width the column fitting measures text in, wider than any cell
+	// Width in which column fitting measures text, wider than any cell
 	unboundedTextWidth = 1 << 20
 )
 
 // tableColumn sets how a tableView sizes, aligns and decorates one column
 type tableColumn struct {
-	// Text whose width the column always fits; empty fits the widest cell of the first layout
+	// Text whose width the column fits; when empty, the column fits its widest cell
 	sample string
-	// Side of the square icon that tableView.layoutIcon draws centered in place of the cell text;
-	// zero draws the text
+	// Side of the square icon that layoutIcon draws in place of the cell text; 0 draws the text
 	icon unit.Dp
-	// Whether the column takes the width the others leave, truncating its cells with an ellipsis
-	// down to the width of its header
+	// The column takes the width that the other columns leave
 	fill      bool
 	alignment text.Alignment
 }
 
-// tableView draws a column-major string table under a locked header row
-//
-// Columns fit their content at the first layout and keep those widths, so filtering or refilling
-// the rows never shifts them. update reports header and row clicks; the owner sorts or selects
-// its data and stores the re-rendered columns and sort state back into the view.
+// tableView draws a table of text columns under a fixed header row. Column widths are fitted at
+// the first layout and kept, so filtering or refilling the rows does not shift them.
 type tableView struct {
 	grid    component.GridState
 	headers []string
@@ -61,14 +56,15 @@ type tableView struct {
 	rowClicks    []gesture.Click
 	rowHeight    unit.Dp
 	selectable   bool
-	// Rows highlighted as the selection and as the comparison, -1 when none
+	// Rows highlighted as the selection and the comparison, -1 when none
 	selectedRow, comparedRow int
 	sortColumn               int
 	sortState                races.SortState
-	// layoutIcon draws the icon of a cell, in a column with one, into the exact constraints
+	// Draws the icon of a cell in an icon column
 	layoutIcon func(gtx layout.Context, row, col int)
 }
 
+// newTableView returns a table view without rows or highlighted rows
 func newTableView(
 	headers []string,
 	styles []tableColumn,
@@ -86,7 +82,7 @@ func newTableView(
 	}
 }
 
-// setColumns replaces the table contents
+// setColumns replaces the cell text of every row
 func (tv *tableView) setColumns(columns [][]string) {
 	tv.columns = columns
 	if tv.selectable && len(tv.rowClicks) != tv.rowCount() {
@@ -94,6 +90,7 @@ func (tv *tableView) setColumns(columns [][]string) {
 	}
 }
 
+// rowCount returns the number of rows
 func (tv *tableView) rowCount() int {
 	if len(tv.columns) == 0 {
 		return 0
@@ -101,16 +98,13 @@ func (tv *tableView) rowCount() int {
 	return len(tv.columns[0])
 }
 
+// scrollToTop scrolls to the first row
 func (tv *tableView) scrollToTop() {
 	tv.grid.Vertical.First, tv.grid.Vertical.Offset = 0, 0
 }
 
-// update reports the clicks since the last frame
-//
-// Returns:
-// - sortColumn: Column whose header was clicked, -1 when none was
-// - clickedRow: Row that was clicked, -1 when none was
-// - rowModifiers: Modifier keys held during the row click
+// update reports the header and row clicks since the last frame. sortColumn and clickedRow
+// are -1 when no click occurred.
 func (tv *tableView) update(
 	gtx layout.Context,
 ) (sortColumn, clickedRow int, rowModifiers key.Modifiers) {
@@ -128,8 +122,7 @@ func (tv *tableView) update(
 	return sortColumn, clickedRow, rowModifiers
 }
 
-// clicked drains the click's events and reports whether any completed a click, with the
-// modifier keys held during the last one
+// clicked reports whether the click completed since the last frame, and the modifier keys held
 func clicked(gtx layout.Context, click *gesture.Click) (ok bool, modifiers key.Modifiers) {
 	for {
 		e, more := click.Update(gtx.Source)
@@ -142,6 +135,7 @@ func clicked(gtx layout.Context, click *gesture.Click) (ok bool, modifiers key.M
 	}
 }
 
+// layout draws the header row and the visible rows
 func (tv *tableView) layout(gtx layout.Context, theme *material.Theme) layout.Dimensions {
 	if tv.widths == nil {
 		tv.fitColumns(gtx, theme)
@@ -170,7 +164,7 @@ func (tv *tableView) layout(gtx layout.Context, theme *material.Theme) layout.Di
 	return dims
 }
 
-// fitColumns sizes each column to fit its header beside a sort arrow, and its icon, sample or
+// fitColumns sizes each column to its header and sort arrow, and to its icon, sample or
 // widest cell
 func (tv *tableView) fitColumns(gtx layout.Context, theme *material.Theme) {
 	gtx.Constraints = layout.Constraints{Max: image.Pt(unboundedTextWidth, gtx.Constraints.Max.Y)}
@@ -196,8 +190,8 @@ func (tv *tableView) fitColumns(gtx layout.Context, theme *material.Theme) {
 	}
 }
 
-// updatePixelWidths converts the fitted widths to pixels, widening the fill column to take what
-// the other columns leave of available
+// updatePixelWidths converts the fitted widths to pixels and widens the fill column to use
+// the available width
 func (tv *tableView) updatePixelWidths(gtx layout.Context, available int) {
 	tv.pixelWidths = tv.pixelWidths[:0]
 	fill, total := -1, 0
@@ -271,7 +265,7 @@ func (tv *tableView) layoutHeader(
 	return layout.Dimensions{Size: size}
 }
 
-// layoutCell draws a body cell on its row's stripe, hover, selection or comparison background
+// layoutCell draws a cell on its row's stripe, hover, selection or comparison background
 func (tv *tableView) layoutCell(
 	gtx layout.Context,
 	theme *material.Theme,
@@ -332,14 +326,15 @@ func (tv *tableView) layoutCell(
 	return layout.Dimensions{Size: size}
 }
 
+// headerLabel returns the style of a header label
 func headerLabel(theme *material.Theme, s string, c color.NRGBA) material.LabelStyle {
 	label := textLabel(theme, smallTextSize, s, c)
 	label.Font.Weight = font.SemiBold
 	return label
 }
 
-// drawSortArrow draws a small accent triangle from x rightward, centered on y, pointing up for an
-// ascending sort and down for a descending one
+// drawSortArrow draws a triangle from x rightward, centered on y, pointing up for ascending and
+// down for descending
 func drawSortArrow(gtx layout.Context, x, y int, descending bool) {
 	left, width := float32(x), float32(gtx.Dp(sortArrowWidth))
 	height := float32(gtx.Dp(sortArrowHeight))

@@ -11,10 +11,11 @@ import (
 	"github.com/cicadaclock/umango/internal/races"
 )
 
+// Space between adjacent pills
 const filterGap = unit.Dp(6)
 
-// distanceFilter is a row of toggle pills, one per distance type and labeled with its name, that
-// select at most one distance type to filter by
+// distanceFilter is a row of pills, one per distance category, that selects at most one
+// category to filter the vet table by
 type distanceFilter struct {
 	// Indexed by races.DistanceType
 	buttons [races.Dirt + 1]widget.Clickable
@@ -22,11 +23,8 @@ type distanceFilter struct {
 	selected races.DistanceType
 }
 
-// update applies the clicks since the last frame: clicking a pill activates its distance type
-// and deactivates the others, and clicking the active pill clears the filter
-//
-// Returns:
-// - changed: Whether the selected distance type changed
+// update applies the pill clicks since the last frame and reports whether the selection
+// changed. Clicking the active pill clears the filter.
 func (f *distanceFilter) update(gtx layout.Context) (changed bool) {
 	for distance := range races.DistanceTypeIter() {
 		if !f.buttons[distance].Clicked(gtx) {
@@ -42,7 +40,7 @@ func (f *distanceFilter) update(gtx layout.Context) (changed bool) {
 	return changed
 }
 
-// layout draws the pills left to right, highlighting the active filter
+// layout draws the pills from left to right, highlighting the active pill
 func (f *distanceFilter) layout(gtx layout.Context, theme *material.Theme) layout.Dimensions {
 	gap := gtx.Dp(filterGap)
 	var size image.Point

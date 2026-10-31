@@ -4,6 +4,8 @@ import (
 	"testing"
 )
 
+// TestDecodeRaceScenario decodes every round of the sample team trial result and checks the
+// decoded values for consistency
 func TestDecodeRaceScenario(t *testing.T) {
 	ttr, err := LoadRaces("../testdata/team_trial.json")
 	if err != nil {
@@ -26,7 +28,7 @@ func TestDecodeRaceScenario(t *testing.T) {
 			continue
 		}
 
-		// Finish orders are seen once and don't go out of bounds
+		// Each finish order is in range and occurs once
 		seen := make([]bool, len(scenario.HorseResults))
 		for _, result := range scenario.HorseResults {
 			if result.FinishOrder < 0 || int(result.FinishOrder) >= len(seen) || seen[result.FinishOrder] {
@@ -36,7 +38,7 @@ func TestDecodeRaceScenario(t *testing.T) {
 			seen[result.FinishOrder] = true
 		}
 
-		// Frame times must ascend and horses only move forward
+		// Frame times ascend and no uma moves backward
 		previous := scenario.Frames[0]
 		for _, frame := range scenario.Frames[1:] {
 			if frame.Time <= previous.Time {
@@ -51,14 +53,14 @@ func TestDecodeRaceScenario(t *testing.T) {
 			previous = frame
 		}
 
-		// Winning horse has no finish diff
+		// The winner has no finish difference
 		for _, result := range scenario.HorseResults {
 			if result.FinishOrder == 0 && result.FinishDiff != 0 {
 				t.Errorf("round %d: winner has finish diff %f, want 0", i+1, result.FinishDiff)
 			}
 		}
 
-		// Every skill activation must reference a skill the horse actually has
+		// Every skill activation names an uma of the round and a skill that uma owns
 		activations := scenario.SkillActivations()
 		if len(activations) == 0 {
 			t.Errorf("round %d: no skill activations decoded", i+1)
@@ -69,8 +71,7 @@ func TestDecodeRaceScenario(t *testing.T) {
 				continue
 			}
 			owned := false
-			// Horses are parsed in the same order as frame order
-			// I don't know if this order is guaranteed though
+			// Horse indices follow gate order
 			if horses[activation.HorseIndex].FrameOrder != (activation.HorseIndex + 1) {
 				t.Errorf("round %d: skill activation with bad horse index %d != %d", i+1, activation.HorseIndex, horses[activation.HorseIndex].FrameOrder)
 				continue
@@ -89,6 +90,7 @@ func TestDecodeRaceScenario(t *testing.T) {
 	}
 }
 
+// TestDecodeRaceScenarioRejectsBadInput checks that malformed scenario strings return errors
 func TestDecodeRaceScenarioRejectsBadInput(t *testing.T) {
 	if _, err := DecodeRaceScenario(""); err == nil {
 		t.Error("want error for empty scenario")
@@ -96,7 +98,7 @@ func TestDecodeRaceScenarioRejectsBadInput(t *testing.T) {
 	if _, err := DecodeRaceScenario("not base64 at all!"); err == nil {
 		t.Error("want error for invalid base64")
 	}
-	// Valid base64 of a valid gzip stream with invalid data
+	// Valid base64 and gzip around data that is not a scenario
 	if _, err := DecodeRaceScenario("H4sIAAAAAAAAA0tMSk4BAM3vwqkEAAAA"); err == nil {
 		t.Error("want error for truncated binary payload")
 	}

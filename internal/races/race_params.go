@@ -2,31 +2,30 @@ package races
 
 import "github.com/cicadaclock/umango/internal/veteran"
 
-// Starting parameters for a single team trial round
+// RaceStartParams is the starting state of one team trial round
 type RaceStartParams struct {
 	Round int `json:"round"`
-	// race_instance id in master.mdb, which sets the course
+	// race_instance ID in master.mdb, which identifies the course
 	RaceInstanceId     int             `json:"race_instance_id"`
 	RaceHorseDataArray []RaceHorseData `json:"race_horse_data_array"`
 }
 
-// An uma entered in a team trial round, similar to a veteran but with some fields named
-// differently
+// RaceHorseData is one uma entered in a team trial round
 type RaceHorseData struct {
+	// 1 for the player's team; other values are opponents
 	TeamId int `json:"team_id"`
-	// Unique chara ID
+	// Veteran ID, unique within its owner's account
 	TrainedCharaId int `json:"trained_chara_id"`
-	// Chara info (so we can tell apart alts)
+	// Card ID, which identifies the chara and outfit
 	CardId int `json:"card_id"`
-	// Starting gate
-	FrameOrder   int             `json:"frame_order"` // ID in the race scenario blob
+	// Gate number, counted from 1
+	FrameOrder   int             `json:"frame_order"`
 	SkillArray   []veteran.Skill `json:"skill_array"`
 	RunningStyle RunStyle        `json:"running_style"`
 }
 
-// Filters RaceHorseDataArray for only our umas
+// GetMyUmas returns the umas of the player's team in the round
 func (rsp RaceStartParams) GetMyUmas() []RaceHorseData {
-	// 3 umas per race
 	umas := make([]RaceHorseData, 0, 3)
 	for _, rhd := range rsp.RaceHorseDataArray {
 		if rhd.ThatsMyUma() {
@@ -36,7 +35,7 @@ func (rsp RaceStartParams) GetMyUmas() []RaceHorseData {
 	return umas
 }
 
-// Checks if this uma belongs to our account
+// ThatsMyUma reports whether the uma belongs to the player's team
 func (rhd RaceHorseData) ThatsMyUma() bool {
 	return rhd.TeamId == 1
 }

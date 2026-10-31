@@ -1,5 +1,4 @@
-// Package logo draws the Umango emblem, a glowing enchanted mango, from vector shapes so that it
-// stays sharp at every size it is shown at.
+// Package logo draws the Umango emblem from vector outlines, so it is sharp at every size.
 package logo
 
 import (
@@ -12,24 +11,22 @@ import (
 	"gioui.org/op/paint"
 )
 
-// The halo around the fruit, leaf and stem is glowLayers translucent fills, each grown glowStep
-// design units past the next, under a rim grown rimWidth past the outline. Filled outlines stand
-// in for strokes, whose coverage Gio's renderer leaks in streaks below them.
+// The halo is glowLayers translucent fills spaced glowStep design units apart, outside a rim of
+// rimWidth. Grown outlines are filled, not stroked, because Gio streaks curved strokes.
 const (
 	glowLayers = 6
 	glowStep   = 0.45
 	rimWidth   = 0.8
 )
 
-// curve is a closed contour of cubic Bézier segments from start, in design units with y pointing
-// down; each segment lists its two control points and its end point
+// curve is a closed outline of cubic Bezier segments in design units, with y pointing down
 type curve struct {
 	start    f32.Point
 	segments [][3]f32.Point
 }
 
-// shape is a smooth closed outline with the grown outlines of its halo layers, outermost first,
-// and of its rim
+// shape is one part of the emblem: its outline, the outlines of its halo layers from the
+// outermost, and the outline of its rim
 type shape struct {
 	outline curve
 	halo    [glowLayers]curve
@@ -43,7 +40,7 @@ type shading struct {
 }
 
 var (
-	// Anchor points traced around each part, which the outlines pass through
+	// Anchor points of the outline of each part, in design units
 	body = newShape(
 		f32.Pt(5.3, 72.8), f32.Pt(6.5, 77.8), f32.Pt(12.3, 84.4), f32.Pt(23.9, 89.4),
 		f32.Pt(38.8, 89.9), f32.Pt(52.1, 85.3), f32.Pt(62.0, 75.3), f32.Pt(67.8, 63.7),
@@ -61,16 +58,15 @@ var (
 		f32.Pt(56.2, 26.8), f32.Pt(58.7, 22.8), f32.Pt(61.7, 19.5), f32.Pt(65.0, 17.7),
 		f32.Pt(66.6, 19.2), f32.Pt(63.3, 21.0), f32.Pt(60.3, 24.3), f32.Pt(57.8, 28.3),
 	)
-	// Glossy reflection on the fruit's upper right shoulder, its halo softening its edge
+	// Highlight on the upper right of the fruit
 	highlight = newShape(
 		f32.Pt(51.0, 37.4), f32.Pt(53.8, 36.2), f32.Pt(56.2, 38.4), f32.Pt(56.8, 42.0),
 		f32.Pt(55.6, 45.6), f32.Pt(53.4, 46.2), f32.Pt(51.8, 43.6), f32.Pt(50.8, 40.4),
 	)
-	// Bounds of the outermost halo, which Draw centers and fits to its square
+	// Bounds of the outermost halo, which Draw fits to the square
 	extentMin, extentMax = haloExtent(&body, &leaf, &stem)
 
-	// The fruit ripens from maroon at the stem through orange to olive at the lower lobe, with a
-	// mauve shadow along its underside, painted as one gradient per pair of stops
+	// Gradients of the fruit, painted in order inside its outline
 	bodyShadings = [...]shading{
 		{f32.Pt(66, 32), f32.Pt(40, 60), rgba(0x801c0eff), rgba(0xda6612ff)},
 		{f32.Pt(38, 60), f32.Pt(12, 84), rgba(0xda661200), rgba(0xb6b320ff)},
@@ -84,12 +80,7 @@ var (
 	colorHighlightHalo = rgba(0xfdcdb914)
 )
 
-// Draw records the emblem into ops, centered in and fitted to the square from the origin to
-// (side, side)
-//
-// Inputs:
-// - ops: Operation list to record into, under the caller's offset and clip
-// - side: Side of the square in pixels
+// Draw records the emblem into ops, centered in and fitted to a square of side pixels
 func Draw(ops *op.Ops, side float32) {
 	// Points are fitted on the CPU, since Gio misrenders gradients under an enlarging op.Affine
 	size := extentMax.Sub(extentMin)
@@ -121,8 +112,8 @@ func Draw(ops *op.Ops, side float32) {
 	fillCurve(ops, stem.outline, fit, colorStem)
 }
 
-// newShape smooths anchors into a closed outline and grows it along its normals into the
-// outlines of its halo layers and rim
+// newShape smooths anchors into a closed outline and grows it outward into the outlines of its
+// halo layers and rim
 func newShape(anchors ...f32.Point) shape {
 	normals := outwardNormals(anchors)
 	grown := func(distance float32) curve {
@@ -139,8 +130,7 @@ func newShape(anchors ...f32.Point) shape {
 	return s
 }
 
-// outwardNormals returns the unit normal at each anchor of the loop through anchors, taken across
-// the chord between its neighbors and pointing away from the enclosed area
+// outwardNormals returns the unit normal at each anchor, pointing away from the enclosed area
 func outwardNormals(anchors []f32.Point) []f32.Point {
 	n := len(anchors)
 	// The shoelace sum is positive when the normal right of the direction of travel points out
@@ -162,8 +152,7 @@ func outwardNormals(anchors []f32.Point) []f32.Point {
 	return normals
 }
 
-// smoothLoop returns the closed curve through points whose segments take their tangents from the
-// neighboring points, as a uniform Catmull-Rom spline does
+// smoothLoop returns the closed uniform Catmull-Rom spline through points as Bezier segments
 func smoothLoop(points []f32.Point) curve {
 	n := len(points)
 	at := func(i int) f32.Point { return points[(i+n)%n] }
@@ -175,8 +164,7 @@ func smoothLoop(points []f32.Point) curve {
 	return c
 }
 
-// haloExtent returns the minimum and maximum corners of the control points of the parts'
-// outermost halo layers, whose bounds contain the curves
+// haloExtent returns the bounds of the control points of the outermost halo layers of parts
 func haloExtent(parts ...*shape) (lo, hi f32.Point) {
 	lo, hi = parts[0].halo[0].start, parts[0].halo[0].start
 	for _, part := range parts {
@@ -190,7 +178,7 @@ func haloExtent(parts ...*shape) (lo, hi f32.Point) {
 	return lo, hi
 }
 
-// path records the curve mapped from design units to pixels by fit
+// path records the curve into ops, transformed from design units to pixels by fit
 func (c curve) path(ops *op.Ops, fit f32.Affine2D) clip.PathSpec {
 	var p clip.Path
 	p.Begin(ops)
@@ -202,12 +190,12 @@ func (c curve) path(ops *op.Ops, fit f32.Affine2D) clip.PathSpec {
 	return p.End()
 }
 
+// fillCurve fills the area inside the curve with a solid color
 func fillCurve(ops *op.Ops, c curve, fit f32.Affine2D, fill color.NRGBA) {
 	paint.FillShape(ops, fill, clip.Outline{Path: c.path(ops, fit)}.Op())
 }
 
-// fillShading paints the area inside path with s, its stops mapped from design units to pixels
-// by fit
+// fillShading fills the area inside path with the gradient s
 func fillShading(ops *op.Ops, path clip.PathSpec, fit f32.Affine2D, s shading) {
 	defer clip.Outline{Path: path}.Op().Push(ops).Pop()
 	paint.LinearGradientOp{

@@ -2,30 +2,30 @@ package races
 
 import "slices"
 
+// SkillTableMapper provides the skill names that the skill table displays
 type SkillTableMapper interface {
-	// Maps Skill ID to skill name
 	SkillNames(ids []int) []string
 }
 
-// SkillTableData holds the Skills in column-major order
+// SkillTableData holds the rows of the skill table, one slice per column
 type SkillTableData struct {
 	Ids   []int
 	Names []string
 	Procs []int
 	Rate  []float32
 
-	// Original ordering
+	// Row order before sorting, which restores the unsorted order
 	origIndices []int
 }
 
-// Indices of the skill table columns in display order
+// Column indices of the skill table, in display order
 const (
 	SkillNameColumn = iota
 	SkillProcsColumn
 	SkillRateColumn
 )
 
-// Source of truth for column order and content
+// skillTableColumns defines the header, cell text and sort order of each skill table column
 var skillTableColumns = []Column[SkillTableData]{
 	SkillNameColumn: {
 		"Name",
@@ -68,14 +68,13 @@ var skillTableColumns = []Column[SkillTableData]{
 	},
 }
 
-// NewSkillTable builds an empty Skill table
-//
-// The table has no rows until you call RefillSkillTable.
+// NewSkillTable returns an empty skill table; RefillSkillTable fills it
 func NewSkillTable() *Table[SkillTableData] {
 	return NewTable(SkillTableData{}, skillTableColumns)
 }
 
-// RefillSkillTable replaces the rows of t with the skill data of one uma
+// RefillSkillTable replaces the rows of the skill table with the skill activations of one uma
+// over size races, ordered by activation count, highest first, then by skill ID
 func RefillSkillTable(t *Table[SkillTableData], dataStore SkillTableMapper, procs map[int]int, size int) {
 	td := t.data
 	n := len(procs)
@@ -85,7 +84,6 @@ func RefillSkillTable(t *Table[SkillTableData], dataStore SkillTableMapper, proc
 	td.Rate = slices.Grow(td.Rate[:0], n)
 	td.origIndices = slices.Grow(td.origIndices[:0], n)
 
-	// Sort by ID
 	for skillId := range procs {
 		td.Ids = append(td.Ids, skillId)
 	}
@@ -112,7 +110,7 @@ func RefillSkillTable(t *Table[SkillTableData], dataStore SkillTableMapper, proc
 	t.sortState = Unsorted
 }
 
-// Filter returns a new SkillTableData containing only the rows at the given indices.
+// Filter returns the rows at the given indices
 func (td SkillTableData) Filter(indices []int) SkillTableData {
 	return SkillTableData{
 		Ids:         filterSlice(td.Ids, indices),
@@ -123,11 +121,12 @@ func (td SkillTableData) Filter(indices []int) SkillTableData {
 	}
 }
 
+// Len returns the number of rows
 func (td SkillTableData) Len() int {
 	return len(td.Ids)
 }
 
-// Swap exchanges rows i and j across all columns
+// Swap exchanges rows i and j in every column
 func (td SkillTableData) Swap(i, j int) {
 	swapSlice(td.Ids, i, j)
 	swapSlice(td.Names, i, j)
@@ -136,6 +135,7 @@ func (td SkillTableData) Swap(i, j int) {
 	swapSlice(td.origIndices, i, j)
 }
 
+// OrigIndex returns the position of a row before sorting
 func (td SkillTableData) OrigIndex(row int) int {
 	return td.origIndices[row]
 }

@@ -5,8 +5,8 @@ import (
 	"testing"
 )
 
-// ttResult mirrors a real team trial, reduced to the fields Summarize
-// parses. Each round has 3 of our umas alongside 2 opponents
+// ttResult is a team trial result reduced to the fields that Summarize reads. Each round has
+// 3 umas of the player's team and 2 opponents.
 var ttResult = TeamTrialResult{
 	RaceStartParamsArray: []RaceStartParams{
 		{
@@ -117,7 +117,7 @@ var ttResult = TeamTrialResult{
 	},
 }
 
-// Current umas in ttResult, in round order
+// Trained chara IDs of the player's umas in ttResult, in round order
 var currentUmas = []int{
 	2984, 2928, 2846,
 	2977, 2994, 3106,
@@ -126,14 +126,15 @@ var currentUmas = []int{
 	2935, 3056, 3102,
 }
 
-// Distance of each round in order
+// Distance category of each round of ttResult
 var distanceOrder = []DistanceType{Mile, Sprint, Medium, Long, Dirt}
 
-// unknownCourses knows no course, so Summarize judges no last spurts
+// unknownCourses knows no course distance, so Summarize judges no full spurts
 type unknownCourses struct{}
 
 func (unknownCourses) CourseDistance(int) int { return 0 }
 
+// TestAppend checks that append adds each result
 func TestAppend(t *testing.T) {
 	s := TeamTrialResultSet{}
 	s.append(ttResult)
@@ -145,11 +146,10 @@ func TestAppend(t *testing.T) {
 	}
 }
 
-// Tests if a single TT result summary outputs the expected values
+// TestSummarizeSingleResult checks the summary of one team trial result
 func TestSummarizeSingleResult(t *testing.T) {
 	s := TeamTrialResultSet{Set: []TeamTrialResult{ttResult}}.Summarize(unknownCourses{})
 
-	// A result fields at most 15 umas, and opponents are not ours
 	if !reflect.DeepEqual(s.TrainedCharaIds, currentUmas) {
 		t.Errorf("s.TrainedCharaIds == %v, want %v", s.TrainedCharaIds, currentUmas)
 	}
@@ -157,28 +157,23 @@ func TestSummarizeSingleResult(t *testing.T) {
 		t.Errorf("s.FieldedCount == %d, want 15", s.FieldedCount)
 	}
 	for i := range s.Len() {
-		// 3 results per distance, so divide by 3
 		want := distanceOrder[i/3]
 		if s.DistanceTypes[i] != want {
 			t.Errorf("s.DistanceTypes[%d] == %v, want %v", i, s.DistanceTypes[i], want)
 		}
-		// IDs should be the same since it's just a diff format
 		if s.CharaData[i].TrainedCharaId != s.TrainedCharaIds[i] {
 			t.Errorf("s.CharaData[%d] ID == %d, want %d", i, s.CharaData[i].TrainedCharaId, s.TrainedCharaIds[i])
 		}
-		// Test data has only 1 score
 		if s.Scores[i].Len() != 1 {
 			t.Errorf("s.Scores[%d].Len() == %d, want 1", i, s.Scores[i].Len())
 		}
 	}
 }
 
-// Tests if a single TT result recorded twice outputs the expected values
+// TestSummarizeDoubleResult checks that a result read twice adds scores but no veterans
 func TestSummarizeDoubleResult(t *testing.T) {
 	s := TeamTrialResultSet{Set: []TeamTrialResult{ttResult, ttResult}}.Summarize(unknownCourses{})
 
-	// Same result twice means the second race introduced no new umas
-	// so only the Scores slice should have 1 extra score
 	if !reflect.DeepEqual(s.TrainedCharaIds, currentUmas) {
 		t.Errorf("s.TrainedCharaIds == %v, want %v", s.TrainedCharaIds, currentUmas)
 	}
@@ -193,16 +188,15 @@ func TestSummarizeDoubleResult(t *testing.T) {
 		if s.CharaData[i].TrainedCharaId != s.TrainedCharaIds[i] {
 			t.Errorf("s.CharaData[%d] ID == %d, want %d", i, s.CharaData[i].TrainedCharaId, s.TrainedCharaIds[i])
 		}
-		// Each uma got 1 score added
 		if s.Scores[i].Len() != 2 {
 			t.Errorf("s.Scores[%d].Len() == %d, want 2", i, s.Scores[i].Len())
 		}
 	}
 }
 
-// Tests if two TT results with different umas output the expected list of current umas
+// TestSummarizeOrderResult checks that the fielded team comes from the newest result
 func TestSummarizeOrderResult(t *testing.T) {
-	// Copy ttResult data so prevResult changes don't affect curResult
+	// Deep copies of ttResult, so changes to prevResult do not reach curResult
 	prevResult := TeamTrialResult{
 		RaceStartParamsArray: make([]RaceStartParams, 5),
 		RaceResultArray:      make([]RaceResult, 5),
@@ -254,7 +248,7 @@ func TestSummarizeOrderResult(t *testing.T) {
 		}
 	}
 
-	// Copied data shouldn't alter curResult slice now
+	// Replace one uma in the older result only
 	prevResult.RaceStartParamsArray[0].RaceHorseDataArray[0].TrainedCharaId = 1234
 	prevResult.RaceResultArray[0].CharaResultArray[0].TrainedCharaId = 1234
 	s := TeamTrialResultSet{Set: []TeamTrialResult{prevResult, curResult}}.Summarize(unknownCourses{})
@@ -269,9 +263,8 @@ func TestSummarizeOrderResult(t *testing.T) {
 	}
 }
 
-// Tests if a malformed TeamTrialResultSet summary skips parsing bad results
+// TestSummarizeBadResult checks that a result without 5 rounds is skipped
 func TestSummarizeBadResult(t *testing.T) {
-	// Malformed race result and race params lengths should skip parsing
 	ttr := ttResult
 	ttr.RaceResultArray = nil
 
@@ -281,8 +274,8 @@ func TestSummarizeBadResult(t *testing.T) {
 	}
 }
 
-// Tests if a malformed TeamTrialResultSet summary skips parsing bad results
-// but keeps any good results
+// TestSummarizeBadResultWithGoodResult checks that a result without 5 rounds is skipped and
+// a valid result is kept
 func TestSummarizeBadResultWithGoodResult(t *testing.T) {
 	ttr := ttResult
 	ttr.RaceResultArray = nil
@@ -293,7 +286,7 @@ func TestSummarizeBadResultWithGoodResult(t *testing.T) {
 	}
 }
 
-// Tests if data checker succeeds on good data
+// TestIsValidData checks that a valid result passes validation
 func TestIsValidData(t *testing.T) {
 	tt := ttResult
 	got := tt.IsValidData()
@@ -303,7 +296,7 @@ func TestIsValidData(t *testing.T) {
 	}
 }
 
-// Tests if data checker fails on bad data
+// TestIsValidDataNotMatchingRounds checks that swapped rounds fail validation
 func TestIsValidDataNotMatchingRounds(t *testing.T) {
 	tt := ttResult
 	tt.RaceStartParamsArray[0].Round = 2
@@ -315,7 +308,7 @@ func TestIsValidDataNotMatchingRounds(t *testing.T) {
 	}
 }
 
-// Tests if data checker fails on bad data
+// TestIsValidDataNotCorrectLength checks that a result with 6 rounds fails validation
 func TestIsValidDataNotCorrectLength(t *testing.T) {
 	tt := ttResult
 	tt.RaceResultArray = append(tt.RaceResultArray, ttResult.RaceResultArray[0])

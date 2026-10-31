@@ -5,6 +5,7 @@ import (
 	"testing"
 )
 
+// TestScoreArrayAppend checks that append adds a score
 func TestScoreArrayAppend(t *testing.T) {
 	s := ScoreArray{}
 
@@ -14,6 +15,7 @@ func TestScoreArrayAppend(t *testing.T) {
 	}
 }
 
+// TestScoreArrayAverage checks the sum and mean of the scores
 func TestScoreArrayAverage(t *testing.T) {
 	s := ScoreArray{}
 	s.append(10)
@@ -26,6 +28,7 @@ func TestScoreArrayAverage(t *testing.T) {
 	}
 }
 
+// TestScoreArrayLen checks the number of scores
 func TestScoreArrayLen(t *testing.T) {
 	s := ScoreArray{}
 	s.append(10)
@@ -36,6 +39,7 @@ func TestScoreArrayLen(t *testing.T) {
 	}
 }
 
+// TestScoreArrayGet checks the score at an index
 func TestScoreArrayGet(t *testing.T) {
 	s := ScoreArray{}
 	s.append(10)
@@ -46,6 +50,7 @@ func TestScoreArrayGet(t *testing.T) {
 	}
 }
 
+// TestScoreArrayMax checks the highest score
 func TestScoreArrayMax(t *testing.T) {
 	s := ScoreArray{}
 	s.append(10)
@@ -56,6 +61,7 @@ func TestScoreArrayMax(t *testing.T) {
 	}
 }
 
+// TestScoreArrayMin checks the lowest score
 func TestScoreArrayMin(t *testing.T) {
 	s := ScoreArray{}
 	s.append(10)
@@ -66,6 +72,7 @@ func TestScoreArrayMin(t *testing.T) {
 	}
 }
 
+// TestScoreArrayFilter checks that Filter keeps the scores at the given indices
 func TestScoreArrayFilter(t *testing.T) {
 	s := ScoreArray{}
 	s.append(10)
@@ -78,6 +85,7 @@ func TestScoreArrayFilter(t *testing.T) {
 	}
 }
 
+// TestScoreBucket checks the bucket index of scores at and around bucket bounds
 func TestScoreBucket(t *testing.T) {
 	scores := []int{3000, 5000, 44999, 45000, 45001}
 	want := []int{0, 1, 8, 9, 9}

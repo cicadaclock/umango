@@ -5,64 +5,68 @@ import (
 	"strconv"
 )
 
+// SortState is the sort direction of a table column
 type SortState int
 
+// Sort states in the order that repeated header clicks select them
 const (
 	Unsorted SortState = iota
 	Ascending
 	Descending
+	// Number of sort states
 	sortStateSize
 )
 
+// Next returns the sort state that the next header click selects
 func (state SortState) Next() SortState {
 	return (state + 1) % sortStateSize
 }
 
-// TableSource is the row storage backing a Table
-//
-// T is the implementing type itself
+// TableSource is the row storage of a Table; T is the implementing type
 type TableSource[T any] interface {
+	// Number of rows
 	Len() int
-	// Swap exchanges rows i and j across all columns
+	// Exchanges rows i and j in every column
 	Swap(i, j int)
-	// OrigIndex returns a row's position before any sorting
+	// Position of a row before sorting
 	OrigIndex(row int) int
-	// Filter returns a copy holding only the rows at the given indices
+	// Copy holding only the rows at the given indices
 	Filter(indices []int) T
 }
 
-// Column contains the header name, rendered data, and row ordering
+// Column defines the header, cell text and sort order of one table column
 type Column[T TableSource[T]] struct {
 	Header string
 	Value  func(data T) []string
 	Less   func(data T, state SortState, i, j int) bool
 }
 
-// Table renders and sorts a TableSource through its columns
+// Table sorts and renders the rows of a TableSource through its columns
 type Table[T TableSource[T]] struct {
 	data    T
 	columns []Column[T]
 
-	// Which column to sort by
+	// Column and direction of the current sort
 	sortColumn int
-	// How to sort the column
-	sortState SortState
+	sortState  SortState
 }
 
+// NewTable returns an unsorted table of data
 func NewTable[T TableSource[T]](data T, columns []Column[T]) *Table[T] {
 	return &Table[T]{data: data, columns: columns}
 }
 
-// Data returns the backing rows in their current order
+// Data returns the rows in their current order
 func (t *Table[T]) Data() T {
 	return t.data
 }
 
-// Filter returns a new unsorted table over the rows at the given indices
+// Filter returns a new unsorted table of the rows at the given indices
 func (t *Table[T]) Filter(indices []int) *Table[T] {
 	return NewTable(t.data.Filter(indices), t.columns)
 }
 
+// Len, Swap and Less implement sort.Interface over the rows
 func (t *Table[T]) Len() int {
 	return t.data.Len()
 }
@@ -71,9 +75,7 @@ func (t *Table[T]) Swap(i, j int) {
 	t.data.Swap(i, j)
 }
 
-// Less compares the sortColumn's rows i and j
-//
-// Unsorted rows compare by their original indices to revert sorting
+// Less orders rows by the sort column, or by their original position when unsorted
 func (t *Table[T]) Less(i, j int) bool {
 	if t.sortState == Unsorted {
 		return t.data.OrigIndex(i) < t.data.OrigIndex(j)
@@ -81,10 +83,8 @@ func (t *Table[T]) Less(i, j int) bool {
 	return t.columns[t.sortColumn].Less(t.data, t.sortState, i, j)
 }
 
-// Sort reorders all rows in place by the given column
-//
-// Consecutive sorts on the same column cycle through ascending, descending, and the
-// original order
+// Sort sorts the rows by a column. Repeated sorts on the same column cycle through ascending,
+// descending and unsorted.
 func (t *Table[T]) Sort(col int) {
 	state := Ascending
 	if col == t.sortColumn {
@@ -93,24 +93,18 @@ func (t *Table[T]) Sort(col int) {
 	t.SortBy(col, state)
 }
 
-// SortBy reorders all rows in place by the given column in the given direction
-//
-// Unsorted restores the original order.
+// SortBy sorts the rows by a column in the given direction; Unsorted restores the original order
 func (t *Table[T]) SortBy(col int, state SortState) {
 	t.sortColumn, t.sortState = col, state
 	sort.Sort(t)
 }
 
-// SortedColumn returns the column the rows are sorted by and the direction of the sort
-//
-// Returns:
-// - col: Index of the sort column, meaningless when state is Unsorted
-// - state: Unsorted when the rows are in their original order
+// SortedColumn returns the sort column and the sort direction
 func (t *Table[T]) SortedColumn() (col int, state SortState) {
 	return t.sortColumn, t.sortState
 }
 
-// Headers returns the header name of each column
+// Headers returns the header of each column
 func (t *Table[T]) Headers() []string {
 	headers := make([]string, len(t.columns))
 	for i, col := range t.columns {
@@ -119,7 +113,7 @@ func (t *Table[T]) Headers() []string {
 	return headers
 }
 
-// Columns returns the table contents in column-major order
+// Columns returns the cell text of every row, one slice per column
 func (t *Table[T]) Columns() [][]string {
 	cols := make([][]string, len(t.columns))
 	for i, col := range t.columns {
@@ -128,7 +122,7 @@ func (t *Table[T]) Columns() [][]string {
 	return cols
 }
 
-// itoaSlice converts a slice of ints to a slice of strings
+// itoaSlice formats each int as decimal text
 func itoaSlice(a []int) []string {
 	result := make([]string, 0, len(a))
 	for _, i := range a {
@@ -137,7 +131,7 @@ func itoaSlice(a []int) []string {
 	return result
 }
 
-// ftoaSlice converts a slice of floats to a slice of strings
+// ftoaSlice formats each float with two decimals
 func ftoaSlice(a []float32) []string {
 	result := make([]string, 0, len(a))
 	for _, i := range a {
@@ -146,7 +140,7 @@ func ftoaSlice(a []float32) []string {
 	return result
 }
 
-// percentSlice converts a slice of fractions to a slice of percentages with one decimal
+// percentSlice formats each fraction as a percentage with one decimal
 func percentSlice(a []float32) []string {
 	result := make([]string, 0, len(a))
 	for _, f := range a {
@@ -155,7 +149,7 @@ func percentSlice(a []float32) []string {
 	return result
 }
 
-// btoaSlice converts a slice of bools to a slice of strings
+// btoaSlice formats each bool as true or false
 func btoaSlice(a []bool) []string {
 	result := make([]string, 0, len(a))
 	for _, i := range a {
@@ -164,10 +158,12 @@ func btoaSlice(a []bool) []string {
 	return result
 }
 
+// swapSlice exchanges elements i and j
 func swapSlice[T any](s []T, i, j int) {
 	s[i], s[j] = s[j], s[i]
 }
 
+// filterSlice returns the elements at the given indices, skipping indices out of range
 func filterSlice[T any](s []T, indices []int) []T {
 	result := make([]T, 0, len(indices))
 	for _, i := range indices {
@@ -179,7 +175,7 @@ func filterSlice[T any](s []T, indices []int) []T {
 	return result
 }
 
-// compareBool reports whether x is greater than y, where true > false
+// compareBool reports whether x orders after y, with true after false
 func compareBool(x, y bool) bool {
 	return x && !y
 }

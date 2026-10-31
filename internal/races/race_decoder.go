@@ -10,107 +10,101 @@ import (
 	"github.com/klauspost/compress/gzip"
 )
 
-// Go implementation of github.com/ayaliz/hakuraku RaceDataParser
+// The race scenario format follows the RaceDataParser of github.com/ayaliz/hakuraku
 
-// RaceScenario represents the deserialized form of the RaceResult.RaceScenario blob
+// RaceScenario is the decoded race scenario of one round
 type RaceScenario struct {
 	Version         int32
 	DistanceDiffMax float32
 	Frames          []RaceFrame
-	// Per-horse outcomes, indexed by horse index
-	// HorseResult indices correspond to positions in RaceStartParams.RaceHorseDataArray
+	// Result of each uma, indexed by RaceHorseData.FrameOrder - 1
 	HorseResults []HorseResult
-	// Point-in-time occurrences such as skill activations
+	// Race events in time order
 	Events []RaceEvent
 }
 
-// RaceFrame represents a snapshot of every horse at any given frame
+// RaceFrame is the state of every uma at one simulation time
 type RaceFrame struct {
-	// Sim time
 	Time   float32
 	Horses []HorseFrame
 }
 
-// HorseFrame represents an uma's position data at any given frame
+// HorseFrame is the state of one uma in a RaceFrame
 type HorseFrame struct {
-	// Position from starting gate in meters
+	// Meters from the start
 	Distance     float32
 	LanePosition uint16
-	Speed        float32 // In m/s
-	HP           uint16
-	// Non-zero while rushed
+	// Meters per second
+	Speed float32
+	HP    uint16
+	// Nonzero while rushed
 	TemptationMode int8
-	// Horse index blocking this one in front, -1 if unblocked
+	// Horse index of the uma blocking in front, -1 when unblocked
 	BlockFrontHorseIndex int8
 }
 
-// HorseResult represents a single uma's race results
+// HorseResult is the race result of one uma
 type HorseResult struct {
-	// 0-indexed placing
+	// Placing, counted from 0
 	FinishOrder int32
-	// Time in seconds (sim time x ~1.2)
+	// Displayed finish time in seconds, about 1.2 times the simulation time
 	FinishTimeRaw float32
-	// Gap in seconds to the horse one place ahead, 0 for the winner
+	// Seconds behind the uma one place ahead, 0 for the winner
 	FinishDiff float32
-	// I lost CM16 to a double late start
 	StartDelay float32
 	GutsOrder  uint8
 	WizOrder   uint8
-	// Meters from the gate where the last spurt began
+	// Meters from the start at which the last spurt began
 	LastSpurtStartDistance float32
 	RunningStyle           RunStyle
 	Defeat                 int32
-	// Sim time
+	// Finish time in simulation seconds
 	FinishTimeSim float32
 }
 
-// Meters past the start of the final leg within which a last spurt counts as started on time.
-// Spurts start within a sim frame's travel of it, a few meters, when on time, and 30 m or more
-// past it when delayed.
+// spurtStartTolerance is the distance in meters into the final leg within which a last spurt
+// counts as a full spurt. Full spurts start within a few meters, late spurts 30 m or more.
 const spurtStartTolerance = 10
 
-// fullSpurt reports whether the horse started its last spurt on entering the final leg, the
-// last third of a course courseDistance meters long, rather than later or never, as a horse
-// short of HP does
+// fullSpurt reports whether the uma started its last spurt on entering the final leg of a
+// course courseDistance meters long
 func (r HorseResult) fullSpurt(courseDistance int) bool {
 	pastFinalLeg := r.LastSpurtStartDistance - float32(courseDistance)*2/3
 	return pastFinalLeg >= 0 && pastFinalLeg < spurtStartTolerance
 }
 
+// RaceEventType is the kind of a race event
 type RaceEventType int8
 
 const (
-	// Skill activation: Params[0] = horse index, Params[1] = skill ID
+	// Skill activation; Params[0] is the horse index and Params[1] is the skill ID
 	EventSkill RaceEventType = 3
 )
 
-// RaceEvent represents any occurrence during the race
+// RaceEvent is one occurrence at a simulation time, such as a skill activation
 type RaceEvent struct {
-	Time   float32 // Time in seconds
+	Time   float32
 	Type   RaceEventType
 	Params []int32
 }
 
-// A skill proc during the race
+// SkillActivation is one skill activation by one uma
 type SkillActivation struct {
 	Time       float32
 	HorseIndex int
 	SkillId    int
 }
 
-// Decodes a raw race_scenario string
+// DecodeRaceScenario decodes one race scenario string; a ScenarioDecoder decodes many
 func DecodeRaceScenario(encoded string) (RaceScenario, error) {
 	var decoder ScenarioDecoder
 	return decoder.Decode(encoded)
 }
 
-// ScenarioDecoder decodes raw race_scenario strings, keeping its buffers and inflater from one
-// call to the next so that repeated decodes neither allocate them again nor leave the core's
-// cache. The zero value is ready to use. It is not safe for concurrent use, so each goroutine
-// needs its own.
+// ScenarioDecoder decodes race scenario strings and reuses its buffers between calls. It is not
+// safe for concurrent use, so each goroutine needs its own.
 type ScenarioDecoder struct {
-	// Whether Decode leaves RaceScenario.Frames empty, skipping the bulk of the scenario that
-	// only replays read
+	// When set, Decode omits RaceScenario.Frames, which the summary does not read
 	SkipFrames bool
 	compressed []byte
 	source     bytes.Reader
@@ -118,11 +112,7 @@ type ScenarioDecoder struct {
 	inflated   bytes.Buffer
 }
 
-// Decode decodes a raw race_scenario string
-//
-// Returns:
-// - scenario: The decoded scenario, which shares no memory with the decoder
-// - err: Failure decoding the base64, inflating the gzip stream or parsing the scenario
+// Decode decodes one race scenario string: base64, then gzip, then the binary scenario format
 func (d *ScenarioDecoder) Decode(encoded string) (RaceScenario, error) {
 	var err error
 	d.compressed, err = base64.StdEncoding.AppendDecode(d.compressed[:0], []byte(encoded))
@@ -140,7 +130,7 @@ func (d *ScenarioDecoder) Decode(encoded string) (RaceScenario, error) {
 	return parseRaceScenario(d.inflated.Bytes(), d.SkipFrames)
 }
 
-// Extracts skill activations from the event list
+// SkillActivations returns the skill activations among the race events
 func (scenario RaceScenario) SkillActivations() []SkillActivation {
 	activations := make([]SkillActivation, 0, len(scenario.Events))
 	for _, event := range scenario.Events {
@@ -156,24 +146,27 @@ func (scenario RaceScenario) SkillActivations() []SkillActivation {
 	return activations
 }
 
-// Minimum struct sizes used to validate data
+// Minimum record sizes in bytes, as of data version 100000002
 const (
 	minHorseFrameSize  = 12
 	minHorseResultSize = 31
 	minEventSize       = 6
 )
 
+// scenarioReader reads little-endian values from a scenario. After the first error, every
+// read returns zero and err holds that error.
 type scenarioReader struct {
 	data []byte
 	off  int
 	err  error
 }
 
+// parseRaceScenario parses the binary scenario format. Record sizes are read from the data,
+// so newer data versions with longer records still parse.
 func parseRaceScenario(data []byte, skipFrames bool) (RaceScenario, error) {
 	var scenario RaceScenario
 	r := &scenarioReader{data: data}
 
-	// Sizes of the various structs in the serialized data
 	headerSize := int(r.i32())
 	headerStart := r.off
 	scenario.Version = r.i32()
@@ -183,9 +176,6 @@ func parseRaceScenario(data []byte, skipFrames bool) (RaceScenario, error) {
 	horseFrameSize := int(r.i32())
 	horseResultSize := int(r.i32())
 
-	// This is presumably a padding region that denotes the start of a major data
-	// section, so that later data versions can append fields and still have older
-	// parsers work
 	r.skip(int(r.i32())) // Padding
 
 	frameCount := int(r.i32())
@@ -239,7 +229,6 @@ func parseRaceScenario(data []byte, skipFrames bool) (RaceScenario, error) {
 	}
 	scenario.Events = make([]RaceEvent, eventCount)
 	for i := range scenario.Events {
-		// Each event record is prefixed with its body length
 		bodySize := int(r.u16())
 		next := r.off + bodySize
 		event := r.DeserializeRaceEvent()
@@ -255,8 +244,7 @@ func parseRaceScenario(data []byte, skipFrames bool) (RaceScenario, error) {
 		return scenario, r.err
 	}
 
-	// A correct parse should land exactly on the end
-	// Leftover bytes mean the parse may have failed
+	// A correct parse ends exactly at the end of the data
 	if r.off != len(data) {
 		return scenario, fmt.Errorf("scenario not fully parsed: stopped at %d of %d bytes", r.off, len(data))
 	}
@@ -264,15 +252,7 @@ func parseRaceScenario(data []byte, skipFrames bool) (RaceScenario, error) {
 	return scenario, nil
 }
 
-// Struct layouts (all little-endian):
-// header:      ii   = int32, int32                                         (8 bytes)
-// raceStruct:  fiii = float32, int32, int32, int32                         (16 bytes)
-// horseFrame:  fHHHbb = float32, uint16, uint16, uint16, int8, int8        (12 bytes)
-// horseResult: ifffBBfBif = int32, f, f, f, uint8, uint8, f, uint8, i, f   (31 bytes)
-// event:       fbb = float32, int8, int8                                   (6 bytes)
-//
-// These are the layouts as of data version 100000002.
-
+// DeserializeHorseFrame reads one horse frame record
 func (r *scenarioReader) DeserializeHorseFrame() HorseFrame {
 	result := HorseFrame{
 		Distance:             r.f32(),
@@ -285,6 +265,7 @@ func (r *scenarioReader) DeserializeHorseFrame() HorseFrame {
 	return result
 }
 
+// DeserializeHorseResult reads one horse result record
 func (r *scenarioReader) DeserializeHorseResult() HorseResult {
 	result := HorseResult{
 		FinishOrder:            r.i32(),
@@ -301,6 +282,7 @@ func (r *scenarioReader) DeserializeHorseResult() HorseResult {
 	return result
 }
 
+// DeserializeRaceEvent reads the fixed part of one race event record
 func (r *scenarioReader) DeserializeRaceEvent() RaceEvent {
 	result := RaceEvent{
 		Time: r.f32(),
@@ -309,7 +291,7 @@ func (r *scenarioReader) DeserializeRaceEvent() RaceEvent {
 	return result
 }
 
-// take takes n bytes from the reader and advances the offset
+// take returns the next n bytes and advances past them, or records an error when fewer remain
 func (r *scenarioReader) take(n int) []byte {
 	if r.err != nil {
 		return nil
@@ -323,7 +305,7 @@ func (r *scenarioReader) take(n int) []byte {
 	return taken
 }
 
-// seek sets the offset to n
+// seek moves to offset n, or records an error when n is outside the data
 func (r *scenarioReader) seek(n int) {
 	if r.err != nil {
 		return
@@ -335,11 +317,12 @@ func (r *scenarioReader) seek(n int) {
 	r.off = n
 }
 
-// skip advances the offset without returning anything
+// skip advances past the next n bytes
 func (r *scenarioReader) skip(n int) {
 	r.take(n)
 }
 
+// i32 reads a little-endian int32
 func (r *scenarioReader) i32() int32 {
 	b := r.take(4)
 	if b == nil {
@@ -348,6 +331,7 @@ func (r *scenarioReader) i32() int32 {
 	return int32(binary.LittleEndian.Uint32(b))
 }
 
+// f32 reads a little-endian float32
 func (r *scenarioReader) f32() float32 {
 	b := r.take(4)
 	if b == nil {
@@ -356,6 +340,7 @@ func (r *scenarioReader) f32() float32 {
 	return math.Float32frombits(binary.LittleEndian.Uint32(b))
 }
 
+// u16 reads a little-endian uint16
 func (r *scenarioReader) u16() uint16 {
 	b := r.take(2)
 	if b == nil {
@@ -364,6 +349,7 @@ func (r *scenarioReader) u16() uint16 {
 	return binary.LittleEndian.Uint16(b)
 }
 
+// u8 reads a uint8
 func (r *scenarioReader) u8() uint8 {
 	b := r.take(1)
 	if b == nil {
@@ -372,6 +358,7 @@ func (r *scenarioReader) u8() uint8 {
 	return b[0]
 }
 
+// i8 reads an int8
 func (r *scenarioReader) i8() int8 {
 	return int8(r.u8())
 }

@@ -4,41 +4,40 @@ import (
 	"fmt"
 )
 
-// AffinityMapper provides the functions this package needs from DataStore
+// AffinityMapper provides the master.mdb data that the affinity calculation needs
 type AffinityMapper interface {
-	// CardChara maps a card ID to its chara ID
+	// Chara ID of a card ID
 	CardChara(cardId int) int
-	// CharaName maps a chara ID to its chara name
+	// Name of a chara ID
 	CharaName(charaId int) string
-	// RelationMembers maps a chara ID to its succession relation types
+	// Succession relation types that include a chara ID
 	RelationMembers(charaId int) []int
-	// RelationPoint maps a succession relation type to its relation points
+	// Affinity points of a succession relation type
 	RelationPoint(relationType int) int
 }
 
-// Single uma in the legacy tree
+// Member is one uma of a legacy tree
 type Member struct {
-	// Chara ID of this uma
 	CharaId int
-	// Race IDs this uma placed 1st in
+	// Win saddle IDs in ascending order
 	WinSaddleIds []int
 }
 
-// Single veteran with its own two parents (trainee's grandparents)
+// Parent is one legacy parent of the trainee, with its own two parents
 type Parent struct {
 	Member
 	GrandParent1 Member
 	GrandParent2 Member
 }
 
-// Uma representation of a full affinity tree:
-// trainee plus two inherited parents
+// Legacy is the legacy tree of a trainee: two parents and their four parents
 type Legacy struct {
 	TraineeCharaId int
 	Parent1        Parent
 	Parent2        Parent
 }
 
+// NewLegacy builds the legacy tree of a trainee from two veterans
 func NewLegacy(traineeCharaId int, parent1, parent2 Veteran, dataStore AffinityMapper) Legacy {
 	return Legacy{
 		TraineeCharaId: traineeCharaId,
@@ -47,9 +46,11 @@ func NewLegacy(traineeCharaId int, parent1, parent2 Veteran, dataStore AffinityM
 	}
 }
 
+// NewParent builds a legacy parent from a veteran and its succession charas
 func NewParent(v Veteran, dataStore AffinityMapper) Parent {
 	parent := Parent{Member: newMember(v.CardId, v.WinSaddleIdArray, dataStore)}
 	for _, chara := range v.SuccessionCharaArray {
+		// Positions 10 and 20 are the veteran's own two parents
 		switch chara.PositionId {
 		case 10:
 			parent.GrandParent1 = newMember(chara.CardId, chara.WinSaddleIdArray, dataStore)
@@ -60,6 +61,7 @@ func NewParent(v Veteran, dataStore AffinityMapper) Parent {
 	return parent
 }
 
+// newMember builds a legacy member from its card ID and win saddle IDs
 func newMember(cardId int, winSaddleIds []int, dataStore AffinityMapper) Member {
 	return Member{
 		CharaId:      dataStore.CardChara(cardId),
@@ -67,6 +69,7 @@ func newMember(cardId int, winSaddleIds []int, dataStore AffinityMapper) Member 
 	}
 }
 
+// Print writes the legacy tree to standard output for diagnosis
 func (legacy Legacy) Print(dataStore AffinityMapper) {
 	fmt.Println(dataStore.CharaName(legacy.TraineeCharaId))
 	fmt.Println("├──", dataStore.CharaName(legacy.Parent1.CharaId))
@@ -77,35 +80,38 @@ func (legacy Legacy) Print(dataStore AffinityMapper) {
 	fmt.Println("    └──", dataStore.CharaName(legacy.Parent2.GrandParent2.CharaId))
 }
 
-// Total affinity score: base affinity + race affinity
+// Affinity returns the total affinity of the legacy tree: base affinity plus race affinity
 func (legacy Legacy) Affinity(dataStore AffinityMapper) int {
 	return legacy.BaseAffinity(dataStore) + legacy.RaceAffinity()
 }
 
-// Affinity from base umas
+// BaseAffinity returns the affinity from the succession relations within the legacy tree
 func (legacy Legacy) BaseAffinity(dataStore AffinityMapper) int {
 	return legacy.Parent1.baseAffinity(dataStore, legacy.TraineeCharaId) +
 		legacy.Parent2.baseAffinity(dataStore, legacy.TraineeCharaId) +
 		relationAffinity(dataStore, legacy.Parent1.CharaId, legacy.Parent2.CharaId)
 }
 
+// baseAffinity returns the relation affinity of the trainee with this parent, and of the
+// trainee and this parent with each grandparent
 func (parent Parent) baseAffinity(dataStore AffinityMapper, traineeCharaId int) int {
 	return relationAffinity(dataStore, traineeCharaId, parent.CharaId) +
 		relationAffinity(dataStore, traineeCharaId, parent.CharaId, parent.GrandParent1.CharaId) +
 		relationAffinity(dataStore, traineeCharaId, parent.CharaId, parent.GrandParent2.CharaId)
 }
 
-// Affinity from races won by both parents and their grandparents
+// RaceAffinity returns the affinity from the win saddles that each parent shares with its parents
 func (legacy Legacy) RaceAffinity() int {
 	return legacy.Parent1.raceAffinity() + legacy.Parent2.raceAffinity()
 }
 
+// raceAffinity returns the win saddles that this parent shares with each of its parents
 func (parent Parent) raceAffinity() int {
 	return calculateRaceAffinity(parent.WinSaddleIds, parent.GrandParent1.WinSaddleIds, parent.GrandParent2.WinSaddleIds)
 }
 
-// Sums the affinity of every succession relation shared by all of the given
-// charas
+// relationAffinity returns the affinity points of every succession relation that includes all
+// of charaIds, or 0 when a chara appears twice
 func relationAffinity(dataStore AffinityMapper, charaIds ...int) int {
 	relationIdsPerChara := make([][]int, len(charaIds))
 	for i, charaId := range charaIds {
@@ -119,6 +125,7 @@ func relationAffinity(dataStore AffinityMapper, charaIds ...int) int {
 	return sumRelationAffinity(dataStore, matchRelationIds(relationIdsPerChara...))
 }
 
+// sumRelationAffinity returns the total affinity points of the succession relation types
 func sumRelationAffinity(dataStore AffinityMapper, relationIds []int) int {
 	var sum int = 0
 	for _, relationId := range relationIds {
@@ -127,6 +134,8 @@ func sumRelationAffinity(dataStore AffinityMapper, relationIds []int) int {
 	return sum
 }
 
+// matchRelationIds returns the relation types present in every list. Each list sets its own
+// bit, so a type present in every list has every bit set.
 func matchRelationIds(relationIdsArgs ...[]int) []int {
 	match := make(map[int]int)
 	matchNum := (1 << len(relationIdsArgs)) - 1
@@ -145,8 +154,8 @@ func matchRelationIds(relationIdsArgs ...[]int) []int {
 	return relationIds
 }
 
-// Counts races shared between winSaddle1 and each other list
-// WinSaddle must be sorted in ascending order
+// calculateRaceAffinity counts the win saddles of winSaddle1 that also appear in winSaddle2
+// and in winSaddle3. Every list must be in ascending order.
 func calculateRaceAffinity(winSaddle1, winSaddle2, winSaddle3 []int) int {
 	// TODO: Maybe assert winSaddle in ascending order?
 	i := 0

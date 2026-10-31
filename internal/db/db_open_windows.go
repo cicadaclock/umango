@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 )
 
+// DBPath returns the path of master.mdb in the Windows install
 func DBPath() (string, error) {
 	dir, err := os.UserHomeDir()
 	if err != nil {

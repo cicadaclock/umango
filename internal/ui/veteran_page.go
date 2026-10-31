@@ -21,17 +21,20 @@ import (
 )
 
 const (
-	// Content width bounds as percentages of the page width
+	// Bounds of the content width, in percent of the page width
 	contentMinPercent = 60
 	contentMaxPercent = 80
 
-	veteranPadding   = unit.Dp(10)
-	chipGap          = unit.Dp(4)
-	chipPaddingX     = unit.Dp(13)
-	chipPaddingY     = unit.Dp(5)
-	parentAPosition  = 10
-	parentBPosition  = 20
-	factorRowCount   = 5
+	veteranPadding = unit.Dp(10)
+	chipGap        = unit.Dp(4)
+	chipPaddingX   = unit.Dp(13)
+	chipPaddingY   = unit.Dp(5)
+	// Legacy positions of the veteran's two parents
+	parentAPosition = 10
+	parentBPosition = 20
+	// Display rows of factor chips: blue, red, green, race and white
+	factorRowCount = 5
+	// Highest star count that a star suffix shows
 	maxStarSuffixLen = 9
 	// A star suffix is a prefix of this string, so suffixes never allocate
 	starSuffixes = " ★★★★★★★★★"
@@ -44,7 +47,8 @@ const (
 	loadErrorGap       = unit.Dp(10)
 )
 
-// factorType is a succession_factor factor_type, which selects a factor chip's color and row
+// factorType is a succession_factor factor_type, which selects the color and display row of a
+// factor chip
 type factorType uint8
 
 const (
@@ -58,6 +62,7 @@ const (
 
 var (
 	colorFactorBackground = rgb(0x232323)
+	// Star colors of the veteran's own factors and of inherited factors
 	colorFactorOwnStars   = color.NRGBA{R: 0xff, G: 0xcf, B: 0x33, A: 0xff}
 	colorFactorParentStar = color.NRGBA{R: 0xff, G: 0xff, B: 0xff, A: 0xff}
 
@@ -79,6 +84,7 @@ var (
 	}
 )
 
+// factorRow returns the display row of a factor type, or -1 to hide the factor
 func factorRow(kind int) int {
 	if kind < 0 || kind >= len(factorRows) {
 		return -1
@@ -86,24 +92,24 @@ func factorRow(kind int) int {
 	return int(factorRows[kind])
 }
 
+// starSuffix returns the star text of a factor level
 func starSuffix(level int) string {
 	return starSuffixes[:len(" ")+len("★")*min(max(level, 0), maxStarSuffixLen)]
 }
 
-// factorChips holds the factor chips of every loaded veteran in display order
-//
-// The chips of veteran v in display row r end at rowEnds[v*factorRowCount+r] and start where
-// the previous row ends.
+// factorChips holds the factor chips of every loaded veteran in display order. The chips of
+// veteran v in display row r end at rowEnds[v*factorRowCount+r].
 type factorChips struct {
-	names     []string
-	stars     []string
-	kinds     []factorType
+	names []string
+	stars []string
+	kinds []factorType
+	// Whether the factor belongs to a parent rather than the veteran
 	inherited []bool
 	rowEnds   []int
 }
 
 // newFactorChips maps the factors of every veteran and its two parents in one batch, then
-// groups each veteran's chips by display row, keeping its own factors before its parents'
+// groups the chips of each veteran by display row, own factors first
 func newFactorChips(dataStore *data.DataStore, vets *veteran.VeteranSlice) factorChips {
 	n := vets.Len()
 	var ids []int
@@ -151,10 +157,12 @@ func newFactorChips(dataStore *data.DataStore, vets *veteran.VeteranSlice) facto
 	return chips
 }
 
+// veteranCount returns the number of loaded veterans
 func (c *factorChips) veteranCount() int {
 	return len(c.rowEnds) / factorRowCount
 }
 
+// row returns the chip range of a display row of a veteran
 func (c *factorChips) row(veteran, row int) (start, end int) {
 	i := veteran*factorRowCount + row
 	if i > 0 {
@@ -163,28 +171,30 @@ func (c *factorChips) row(veteran, row int) (start, end int) {
 	return start, c.rowEnds[i]
 }
 
-// veteranLoad carries a veterans file chosen in the file picker into the window goroutine
+// veteranLoad carries a loaded veterans file to the window goroutine
 type veteranLoad struct {
 	chips factorChips
 	err   error
 }
 
-// veteranPage lists the factors of every veteran in a veterans file the user picks
+// veteranPage lists the factors of every veteran in a veterans file that the user chooses
 type veteranPage struct {
 	dataStore  *data.DataStore
 	panel      panel
 	loadButton widget.Clickable
-	choosing   bool
-	loads      chan veteranLoad
-	loadError  string
-	chips      factorChips
-	// Loaded veteran count, formatted when a file loads
+	// Whether the file picker is open
+	choosing  bool
+	loads     chan veteranLoad
+	loadError string
+	chips     factorChips
+	// Loaded veteran count text
 	veteranCount string
 	list         widget.List
-	// Content width in pixels, stepped between contentMinPercent and contentMaxPercent
+	// Content width in pixels, kept between the content width bounds
 	width int
 }
 
+// newVeteranPage returns an empty veteran page
 func newVeteranPage(dataStore *data.DataStore) *veteranPage {
 	return &veteranPage{
 		dataStore: dataStore,
@@ -194,6 +204,7 @@ func newVeteranPage(dataStore *data.DataStore) *veteranPage {
 	}
 }
 
+// update opens the file picker on a load button click and applies a finished load
 func (p *veteranPage) update(gtx layout.Context, picker *explorer.Explorer, invalidate func()) {
 	if p.loadButton.Clicked(gtx) && !p.choosing {
 		p.choosing = true
@@ -217,8 +228,8 @@ func (p *veteranPage) update(gtx layout.Context, picker *explorer.Explorer, inva
 	}
 }
 
-// chooseFile blocks on the file picker, then decodes and maps the chosen veterans file off the
-// window goroutine
+// chooseFile waits for the file picker, then reads and maps the chosen veterans file outside
+// the window goroutine
 func (p *veteranPage) chooseFile(picker *explorer.Explorer, invalidate func()) {
 	defer invalidate()
 	file, err := picker.ChooseFile(".json")
@@ -235,6 +246,7 @@ func (p *veteranPage) chooseFile(picker *explorer.Explorer, invalidate func()) {
 	p.loads <- veteranLoad{chips: newFactorChips(p.dataStore, vets)}
 }
 
+// layout draws the toolbar above the veteran list
 func (p *veteranPage) layout(
 	gtx layout.Context,
 	theme *material.Theme,
@@ -259,7 +271,7 @@ func (p *veteranPage) layout(
 	)
 }
 
-// layoutToolbar draws the load button and the last load error above the veteran list
+// layoutToolbar draws the load button and the last load error
 func (p *veteranPage) layoutToolbar(gtx layout.Context, theme *material.Theme) layout.Dimensions {
 	inset := layout.Inset{
 		Top:    toolbarPadding,
@@ -294,7 +306,7 @@ func (p *veteranPage) layoutToolbar(gtx layout.Context, theme *material.Theme) l
 	return dims
 }
 
-// layoutList centers the veteran list in the stepped content width
+// layoutList draws the veteran list centered in the content width
 func (p *veteranPage) layoutList(gtx layout.Context, theme *material.Theme) layout.Dimensions {
 	available := gtx.Constraints.Max.X
 	p.width = steppedWidth(p.width, available)
@@ -312,9 +324,8 @@ func (p *veteranPage) layoutList(gtx layout.Context, theme *material.Theme) layo
 	return dims
 }
 
-// steppedWidth keeps width between contentMinPercent and contentMaxPercent of available. A
-// width pushed outside that band snaps to the opposite bound, so the chip rows reflow at a few
-// steps instead of on every resize.
+// steppedWidth keeps width within the content width bounds of available. A width outside the
+// bounds moves to the opposite bound, so the chip rows reflow in steps, not at every resize.
 func steppedWidth(width, available int) int {
 	switch {
 	case width*100 < available*contentMinPercent:
@@ -325,7 +336,7 @@ func steppedWidth(width, available int) int {
 	return width
 }
 
-// layoutVeteran draws veteran v's non-empty chip rows above a separator
+// layoutVeteran draws the non-empty chip rows of veteran v above a separator
 func (p *veteranPage) layoutVeteran(gtx layout.Context, theme *material.Theme, v int) layout.Dimensions {
 	padding, gap := gtx.Dp(veteranPadding), gtx.Dp(chipGap)
 	width := gtx.Constraints.Max.X
@@ -348,8 +359,8 @@ func (p *veteranPage) layoutVeteran(gtx layout.Context, theme *material.Theme, v
 	return layout.Dimensions{Size: image.Pt(width, separator.Max.Y)}
 }
 
-// layoutChipRow places chips [start, end) left to right, wrapping at the maximum width, and
-// returns the row height
+// layoutChipRow places chips start through end-1 from left to right, wrapping at the maximum
+// width, and returns the row height
 func (p *veteranPage) layoutChipRow(gtx layout.Context, theme *material.Theme, start, end int) int {
 	gap := gtx.Dp(chipGap)
 	maxWidth := gtx.Constraints.Max.X
@@ -371,7 +382,7 @@ func (p *veteranPage) layoutChipRow(gtx layout.Context, theme *material.Theme, s
 	return y + lineHeight
 }
 
-// layoutChip draws chip i as its name and star suffix on a rounded dark background
+// layoutChip draws chip i as its name and stars on a rounded background
 func (p *veteranPage) layoutChip(gtx layout.Context, theme *material.Theme, i int) image.Point {
 	paddingX, paddingY := gtx.Dp(chipPaddingX), gtx.Dp(chipPaddingY)
 

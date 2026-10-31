@@ -58,7 +58,7 @@ const (
 var (
 	tabTitles = [tabCount]string{tabTeamTrials: "TT Chart", tabVeteranList: "Veteran List"}
 
-	// Weight instances of the Inter variable font that the full shaper adds to the regular face
+	// Weight instances of the Inter variable font that the full shaper adds
 	interInstances = [...]struct {
 		weight font.Weight
 		wght   float32
@@ -66,21 +66,12 @@ var (
 		{font.SemiBold, 600},
 		{font.ExtraBold, 800},
 	}
-	// The wordmark's gradient runs from this amber into the accent
+	// Start color of the wordmark gradient, which ends in the accent color
 	colorWordmarkStart = rgb(0xffa630)
 )
 
-// App opens the Umango window and loads master.mdb and the saved races in the background.
-//
-// App must be called from the main goroutine, as it hands the main thread to the window system.
-// Once the window opens App never returns: the process exits when the window closes, or logs
-// fatally when the window fails.
-//
-// Inputs:
-// - assets: Embedded file system holding the Inter font
-//
-// Returns:
-// - err: Failure reading or parsing the font, before the window opens
+// App opens the Umango window and loads master.mdb and the team trial results in the
+// background. It must run on the main goroutine and does not return once the window opens.
 func App(assets embed.FS) error {
 	fontData, err := assets.ReadFile(fontPath)
 	if err != nil {
@@ -100,11 +91,8 @@ func App(assets embed.FS) error {
 	return nil
 }
 
-// newShaper parses fontData, the Inter variable font, into a text shaper
-//
-// The full shaper adds semibold and extra bold instances of Inter and falls back to the system
-// fonts for glyphs Inter lacks. Each costs milliseconds, so the first frames use a regular-only
-// shaper while the loader builds the full one in the background.
+// newShaper parses the Inter font into a text shaper. The full shaper adds the bold weights and
+// the system fonts, which takes milliseconds, so the first frames use one without them.
 func newShaper(fontData []byte, full bool) (*text.Shaper, error) {
 	regular, err := opentype.Parse(fontData)
 	if err != nil {
@@ -130,30 +118,30 @@ func newShaper(fontData []byte, full bool) (*text.Shaper, error) {
 	return text.NewShaper(text.WithCollection(faces)), nil
 }
 
-// variedFace serves a variable font at fixed variation axis values
+// variedFace is a variable font face at fixed variation axis values
 type variedFace struct {
 	face       opentype.Face
 	variations []fontapi.Variation
 }
 
-// Face returns a face of the font at the variation axis values, for use by a single goroutine
+// Face returns a face at the variation axis values, for use by one goroutine
 func (f variedFace) Face() *fontapi.Face {
 	face := f.face.Face()
 	face.SetVariations(f.variations)
 	return face
 }
 
-// loadResult carries the background load into the window goroutine
+// loadResult carries the result of the background load to the window goroutine
 type loadResult struct {
 	shaper     *text.Shaper
 	dataStore  *data.DataStore
 	teamTrials *teamTrialsPage
-	// Directory the saved races loaded from
+	// Directory of the team trial result files
 	resultsDir string
 	err        error
 }
 
-// load reads master.mdb and the saved races concurrently and aggregates them into the TT page
+// load reads master.mdb and the team trial results concurrently and builds the TT page
 func load(fontData []byte) loadResult {
 	var (
 		result    loadResult
@@ -180,11 +168,11 @@ type screen struct {
 	activeTab  int
 	teamTrials *teamTrialsPage
 	veterans   *veteranPage
-	// Reloads of the TT page's data from the results watcher, at most one waiting
+	// TT page data reloaded by the results watcher, holding at most one pending reload
 	reloads chan teamTrialsData
 }
 
-// run drives the window event loop until the window closes
+// run processes window events until the window closes
 func run(fontData []byte, shaper *text.Shaper) error {
 	var window app.Window
 	window.Option(
@@ -227,8 +215,8 @@ func run(fontData []byte, shaper *text.Shaper) error {
 	}
 }
 
-// applyLoad installs the background load results and starts watching for new races, or shows
-// the load's error message on failure
+// applyLoad installs the background load and starts watching for new results, or shows the
+// load error
 func (s *screen) applyLoad(result loadResult) {
 	if result.err != nil {
 		log.Printf("load data: %v", result.err)
@@ -241,8 +229,8 @@ func (s *screen) applyLoad(result loadResult) {
 	go watchTeamTrialResults(result.resultsDir, result.dataStore, s.deliverReload)
 }
 
-// deliverReload hands the window goroutine a reload of the TT page's data, replacing one it has
-// not applied yet, and wakes it to apply it
+// deliverReload passes a reload to the window goroutine, replacing a pending reload that was
+// not applied, and requests a frame
 func (s *screen) deliverReload(loaded teamTrialsData) {
 	select {
 	case <-s.reloads:
@@ -252,6 +240,7 @@ func (s *screen) deliverReload(loaded teamTrialsData) {
 	s.window.Invalidate()
 }
 
+// layout draws the load error, the loading message, or the active page under the top bar
 func (s *screen) layout(gtx layout.Context) layout.Dimensions {
 	paint.Fill(gtx.Ops, colorWindow)
 	switch {
@@ -278,7 +267,7 @@ func (s *screen) layout(gtx layout.Context) layout.Dimensions {
 	)
 }
 
-// layoutTopBar draws the logo, the wordmark and the page tabs left to right above a divider
+// layoutTopBar draws the logo, the wordmark and the page tabs from left to right above a divider
 func (s *screen) layoutTopBar(gtx layout.Context) layout.Dimensions {
 	size := image.Pt(gtx.Constraints.Max.X, gtx.Dp(topBarHeight))
 	gtx.Constraints = layout.Constraints{Max: size}
@@ -301,8 +290,8 @@ func (s *screen) layoutTopBar(gtx layout.Context) layout.Dimensions {
 	return layout.Dimensions{Size: size}
 }
 
-// layoutWordmark draws the application name in heavy capitals shaded by the accent gradient,
-// its capitals centered in the height of the maximum constraints
+// layoutWordmark draws the application name in the wordmark gradient, its capitals centered
+// vertically
 func layoutWordmark(gtx layout.Context, theme *material.Theme) layout.Dimensions {
 	height := gtx.Constraints.Max.Y
 	gtx.Constraints.Min = image.Point{}
@@ -328,8 +317,7 @@ func layoutWordmark(gtx layout.Context, theme *material.Theme) layout.Dimensions
 	return layout.Dimensions{Size: image.Pt(dims.Size.X, height)}
 }
 
-// layoutPageTab draws page i's title, brightened while hovered or active, and underlines the
-// active page in the accent
+// layoutPageTab draws the title of page i and underlines the active page
 func (s *screen) layoutPageTab(gtx layout.Context, i int) layout.Dimensions {
 	tab := &s.tabs[i]
 	return tab.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
@@ -360,6 +348,7 @@ func (s *screen) layoutPageTab(gtx layout.Context, i int) layout.Dimensions {
 	})
 }
 
+// layoutLoading draws the loading indicator and the loading message
 func layoutLoading(gtx layout.Context, theme *material.Theme) layout.Dimensions {
 	return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		return layout.Flex{Axis: layout.Vertical, Alignment: layout.Middle}.Layout(gtx,
@@ -374,7 +363,7 @@ func layoutLoading(gtx layout.Context, theme *material.Theme) layout.Dimensions 
 	})
 }
 
-// layoutCenteredText draws s centered in the constraints, wrapping at line breaks
+// layoutCenteredText draws s centered in the constraints
 func layoutCenteredText(
 	gtx layout.Context,
 	theme *material.Theme,

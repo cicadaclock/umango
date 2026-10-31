@@ -1,5 +1,4 @@
-// Interface for handling the data from master.mdb in memory
-
+// Package data holds the master.mdb tables that the application reads, loaded into memory once.
 package data
 
 import (
@@ -9,40 +8,42 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// Anything we want to store as a single source of data
+// DataStore holds the master.mdb lookup tables in memory
 type DataStore struct {
-	cardData                  map[int]int
-	successionRelations       map[int]int
+	// Card ID to chara ID
+	cardData map[int]int
+	// Succession relation type to affinity points
+	successionRelations map[int]int
+	// Chara ID to the succession relation types that include the chara
 	successionRelationMembers map[int][]int
-	factorType                map[int]int
-	ttRawScores               map[int]int
-	// Race instance ID to course length in meters
+	// Factor ID to factor type
+	factorType map[int]int
+	// Raw score ID to base score
+	ttRawScores map[int]int
+	// Race instance ID to course distance in meters
 	courseDistances map[int]int
 
-	// Text mappings
-	// Skill ID to factor name
+	// Skill ID to skill name
 	skillNames map[int]string
 	// Factor ID to factor name
 	factorNames map[int]string
-	// Veteran card ID to full chara title + name
+	// Card ID to chara title and name
 	veteranCardId map[int]string
-	// Veteran card ID to chara name
+	// Chara ID to chara name
 	charaNames map[int]string
 }
 
-// Load DB tables into memory
+// Init opens master.mdb and loads every lookup table into memory concurrently
 func Init() (*DataStore, error) {
 	dataStore := DataStore{}
 	var err error
 
-	// Open DB connection
 	db, err := db.Open()
 	if err != nil {
 		return &dataStore, fmt.Errorf("opening master.mdb: %w", err)
 	}
 	defer db.SqlDB.Close()
 
-	// Store DB results into memory
 	var g errgroup.Group
 	g.Go(func() (err error) { dataStore.cardData, err = db.CardData(); return })
 	g.Go(func() (err error) { dataStore.successionRelations, err = db.SuccessionRelations(); return })
@@ -61,7 +62,7 @@ func Init() (*DataStore, error) {
 	return &dataStore, nil
 }
 
-// Maps skill ID to skill name
+// SkillNames returns the name of each skill ID
 func (dataStore *DataStore) SkillNames(ids []int) []string {
 	result := make([]string, 0, len(ids))
 	for _, id := range ids {
@@ -70,7 +71,7 @@ func (dataStore *DataStore) SkillNames(ids []int) []string {
 	return result
 }
 
-// Maps factor ID to factor name
+// FactorNames returns the name of each factor ID
 func (dataStore *DataStore) FactorNames(ids []int) []string {
 	result := make([]string, 0, len(ids))
 	for _, id := range ids {
@@ -79,7 +80,7 @@ func (dataStore *DataStore) FactorNames(ids []int) []string {
 	return result
 }
 
-// Maps factor ID to factor type (r/g/b/race/white)
+// FactorClass returns the factor type of each factor ID
 func (dataStore *DataStore) FactorClass(ids []int) []int {
 	result := make([]int, 0, len(ids))
 	for _, id := range ids {
@@ -88,7 +89,7 @@ func (dataStore *DataStore) FactorClass(ids []int) []int {
 	return result
 }
 
-// Maps score ID to raw score value
+// TTRawScores returns the base score of each raw score ID
 func (dataStore *DataStore) TTRawScores(ids []int) []int {
 	result := make([]int, 0, len(ids))
 	for _, id := range ids {
@@ -97,7 +98,7 @@ func (dataStore *DataStore) TTRawScores(ids []int) []int {
 	return result
 }
 
-// Maps factor ID to factor level
+// FactorLevels returns the star level of each factor ID, held in its last two digits
 func (dataStore *DataStore) FactorLevels(ids []int) []int {
 	result := make([]int, 0, len(ids))
 	for _, id := range ids {
@@ -106,7 +107,7 @@ func (dataStore *DataStore) FactorLevels(ids []int) []int {
 	return result
 }
 
-// Maps veteran card ID to chara title. Example: "[Title] Name"
+// VeteranCardCharaTitle returns the title and name of each card ID, as "[Title] Name"
 func (dataStore *DataStore) VeteranCardCharaTitle(veteranCardIds []int) []string {
 	names := make([]string, 0, len(veteranCardIds))
 	for _, id := range veteranCardIds {
@@ -115,7 +116,7 @@ func (dataStore *DataStore) VeteranCardCharaTitle(veteranCardIds []int) []string
 	return names
 }
 
-// Maps veteran card ID to chara id
+// VeteranCardChara returns the chara ID of each card ID
 func (dataStore *DataStore) VeteranCardChara(veteranCardIds []int) []int {
 	ids := make([]int, 0, len(veteranCardIds))
 	for _, id := range veteranCardIds {
@@ -125,7 +126,7 @@ func (dataStore *DataStore) VeteranCardChara(veteranCardIds []int) []int {
 	return ids
 }
 
-// Maps veteran card ID to chara name. Example: "Name"
+// VeteranCardCharaName returns the chara name of each card ID, without the title
 func (dataStore *DataStore) VeteranCardCharaName(veteranCardIds []int) []string {
 	names := make([]string, 0, len(veteranCardIds))
 	for _, id := range veteranCardIds {
@@ -136,27 +137,27 @@ func (dataStore *DataStore) VeteranCardCharaName(veteranCardIds []int) []string 
 	return names
 }
 
-// CardChara maps a card ID to its chara ID
+// CardChara returns the chara ID of a card ID
 func (dataStore *DataStore) CardChara(cardId int) int {
 	return dataStore.cardData[cardId]
 }
 
-// CharaName maps a chara ID to its chara name
+// CharaName returns the name of a chara ID
 func (dataStore *DataStore) CharaName(charaId int) string {
 	return dataStore.charaNames[charaId]
 }
 
-// CourseDistance maps a race instance ID to the length of its course in meters, 0 when unknown
+// CourseDistance returns the course distance in meters of a race instance ID, or 0 when unknown
 func (dataStore *DataStore) CourseDistance(raceInstanceId int) int {
 	return dataStore.courseDistances[raceInstanceId]
 }
 
-// RelationMembers maps a chara ID to its succession relation members
+// RelationMembers returns the succession relation types that include a chara ID
 func (dataStore *DataStore) RelationMembers(charaId int) []int {
 	return dataStore.successionRelationMembers[charaId]
 }
 
-// RelationPoint maps a succession relation type to its relation points
+// RelationPoint returns the affinity points of a succession relation type
 func (dataStore *DataStore) RelationPoint(relationType int) int {
 	return dataStore.successionRelations[relationType]
 }

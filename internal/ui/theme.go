@@ -16,26 +16,23 @@ import (
 	"gioui.org/widget/material"
 )
 
-// Type scale and shared metrics of the dark theme
+// Text sizes and shared dimensions of the dark theme
 const (
 	textSize        = unit.Sp(13)
 	smallTextSize   = unit.Sp(12)
 	captionTextSize = unit.Sp(11)
-	// Gap between panels and around the window edge
+	// Space between panels and around the window edge
 	gutterWidth   = unit.Dp(6)
 	borderWidth   = unit.Dp(1)
 	controlRadius = unit.Dp(4)
-	// Gap between a pill's edge and its label
+	// Space between the edge of a pill and its label
 	pillPaddingX   = unit.Dp(10)
 	pillPaddingY   = unit.Dp(4)
 	scrollbarWidth = unit.Dp(6)
 )
 
-// Dark palette sampled from the Blick video editor: near black gutters around flat panels, gray
-// secondary text, and a single orange accent for focus, selection and data
-//
-// Gio blends translucent colors in linear light, which brightens them far past their sRGB value
-// over dark panels, so tints are opaque colors mixed for the panel background.
+// Dark palette with one orange accent for focus, selection and data. Tints are opaque, because
+// Gio blends translucent colors in linear light, which brightens them over dark panels.
 var (
 	colorWindow       = rgb(0x0f0f0f)
 	colorPanel        = rgb(0x161616)
@@ -57,16 +54,17 @@ var (
 	colorAccentBright = rgb(0xffa066)
 	colorSelection    = rgb(0x3d2316)
 	colorError        = rgb(0xff5c5c)
-	// A cool blue set against the orange accent marks the veteran compared to the selected one
+	// Blue marks the compared veteran, against the orange of the selected veteran
 	colorCompare          = rgb(0x4ea8ff)
 	colorCompareSelection = rgb(0x1f2e3f)
 )
 
-// highlightColors tint an active control or a chosen table row; the zero value highlights nothing
+// highlightColors are the colors of an active control or a chosen table row; the zero value
+// is no highlight
 type highlightColors struct {
-	// Background of the highlighted item
+	// Background
 	fill color.NRGBA
-	// Stronger color of its outline or edge marker
+	// Outline or edge marker
 	accent color.NRGBA
 }
 
@@ -80,7 +78,7 @@ func rgb(hex uint32) color.NRGBA {
 	return color.NRGBA{R: uint8(hex >> 16), G: uint8(hex >> 8), B: uint8(hex), A: 0xff}
 }
 
-// newTheme returns the dark theme drawing text with shaper
+// newTheme returns the dark theme, drawing text with shaper
 func newTheme(shaper *text.Shaper) *material.Theme {
 	theme := material.NewTheme()
 	theme.Shaper = shaper
@@ -94,7 +92,7 @@ func newTheme(shaper *text.Shaper) *material.Theme {
 	return theme
 }
 
-// textLabel returns a one line label of s that ends in an ellipsis when it overflows its width
+// textLabel returns a single line label of s that ends in an ellipsis when it overflows
 func textLabel(theme *material.Theme, size unit.Sp, s string, c color.NRGBA) material.LabelStyle {
 	label := material.Label(theme, size, s)
 	label.Color = c
@@ -103,7 +101,7 @@ func textLabel(theme *material.Theme, size unit.Sp, s string, c color.NRGBA) mat
 	return label
 }
 
-// measureLabel returns the size label takes within gtx's constraints, without drawing it
+// measureLabel returns the size of label within the constraints, without drawing it
 func measureLabel(gtx layout.Context, label material.LabelStyle) image.Point {
 	macro := op.Record(gtx.Ops)
 	dims := label.Layout(gtx)
@@ -111,7 +109,7 @@ func measureLabel(gtx layout.Context, label material.LabelStyle) image.Point {
 	return dims.Size
 }
 
-// styleScrollbar restyles s as a slim thumb without a track
+// styleScrollbar sets s to a narrow thumb without a track
 func styleScrollbar(s *material.ScrollbarStyle) {
 	s.Indicator.Color = colorScrollbar
 	s.Indicator.HoverColor = colorScrollHover
@@ -119,12 +117,13 @@ func styleScrollbar(s *material.ScrollbarStyle) {
 	s.Indicator.CornerRadius = scrollbarWidth / 2
 }
 
+// fillRect fills r with a solid color
 func fillRect(gtx layout.Context, c color.NRGBA, r image.Rectangle) {
 	paint.FillShape(gtx.Ops, c, clip.Rect(r).Op())
 }
 
-// strokeRRect draws a borderWidth outline along the inside of r, aligned to whole pixels so it
-// stays sharp
+// strokeRRect draws a borderWidth outline inside r, offset half a stroke so it is aligned to
+// whole pixels
 func strokeRRect(gtx layout.Context, c color.NRGBA, r image.Rectangle, radius int) {
 	width := gtx.Dp(borderWidth)
 	half := float32(width) / 2
@@ -134,8 +133,8 @@ func strokeRRect(gtx layout.Context, c color.NRGBA, r image.Rectangle, radius in
 	paint.FillShape(gtx.Ops, c, clip.Stroke{Path: path, Width: float32(width)}.Op())
 }
 
-// layoutPill draws label in an outlined capsule that shows button's hovered and pressed states,
-// or is filled and outlined in highlight while active, that is while highlight is not zero
+// layoutPill draws label in an outlined capsule button. A nonzero highlight marks the pill as
+// active.
 func layoutPill(
 	gtx layout.Context,
 	theme *material.Theme,

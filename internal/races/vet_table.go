@@ -1,11 +1,11 @@
 package races
 
+// VetTableMapper provides the chara titles that the vet table displays
 type VetTableMapper interface {
-	// Maps veteran card ID to chara name
 	VeteranCardCharaTitle(ids []int) []string
 }
 
-// VetTableData holds the TT veteran rows in column-major order
+// VetTableData holds the rows of the vet table, one slice per column
 type VetTableData struct {
 	TrainedCharaIds []int
 	Names           []string
@@ -16,15 +16,15 @@ type VetTableData struct {
 	NumRaces        []int
 	MaxScores       []int
 	AvgScores       []int
-	// Fraction of races in which the uma started its last spurt on entering the final leg
+	// Fraction of races with a full spurt
 	SpurtRates []float32
 	Fielded    []bool
 
-	// Original ordering that sorts by currently used umas
+	// Summary index order, which places the fielded team first
 	origIndices []int
 }
 
-// Indices of the vet table columns in display order
+// Column indices of the vet table, in display order
 const (
 	VetIdColumn = iota
 	VetFieldedColumn
@@ -37,7 +37,7 @@ const (
 	VetSpurtColumn
 )
 
-// Source of truth for column order and content
+// vetTableColumns defines the header, cell text and sort order of each vet table column
 var vetTableColumns = []Column[VetTableData]{
 	VetIdColumn: {
 		"ID",
@@ -158,11 +158,12 @@ var vetTableColumns = []Column[VetTableData]{
 	},
 }
 
-// NewVetTable builds the TT veteran table from a summary
+// NewVetTable returns the vet table of the veterans in summary
 func NewVetTable(dataStore VetTableMapper, summary TTUmaSummary) *Table[VetTableData] {
 	return NewTable(newVetTableData(dataStore, summary), vetTableColumns)
 }
 
+// newVetTableData builds one row per veteran with at least one scored race
 func newVetTableData(dataStore VetTableMapper, summary TTUmaSummary) VetTableData {
 	n := summary.Len()
 	result := VetTableData{
@@ -180,7 +181,7 @@ func newVetTableData(dataStore VetTableMapper, summary TTUmaSummary) VetTableDat
 		origIndices:     make([]int, 0, n),
 	}
 
-	// Summary orders the current team first
+	// The summary places the fielded team first, so the first FieldedCount indices are fielded
 	for i := range n {
 		scores := summary.Scores[i]
 		if scores.Len() == 0 {
@@ -208,7 +209,7 @@ func newVetTableData(dataStore VetTableMapper, summary TTUmaSummary) VetTableDat
 	return result
 }
 
-// Filter returns a new VetTableData containing only the rows at the given indices.
+// Filter returns the rows at the given indices
 func (td VetTableData) Filter(indices []int) VetTableData {
 	return VetTableData{
 		TrainedCharaIds: filterSlice(td.TrainedCharaIds, indices),
@@ -226,11 +227,12 @@ func (td VetTableData) Filter(indices []int) VetTableData {
 	}
 }
 
+// Len returns the number of rows
 func (td VetTableData) Len() int {
 	return len(td.TrainedCharaIds)
 }
 
-// Swap exchanges rows i and j across all columns
+// Swap exchanges rows i and j in every column
 func (td VetTableData) Swap(i, j int) {
 	swapSlice(td.TrainedCharaIds, i, j)
 	swapSlice(td.Names, i, j)
@@ -246,11 +248,12 @@ func (td VetTableData) Swap(i, j int) {
 	swapSlice(td.origIndices, i, j)
 }
 
+// OrigIndex returns the position of a row before sorting
 func (td VetTableData) OrigIndex(row int) int {
 	return td.origIndices[row]
 }
 
-// GetTrainedCharaId returns a single TrainedCharaId from a given row
+// GetTrainedCharaId returns the trained chara ID of a row
 func (td VetTableData) GetTrainedCharaId(row int) int {
 	return td.TrainedCharaIds[row]
 }

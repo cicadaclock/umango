@@ -11,6 +11,8 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// LoadRacesFolder reads every team trial result file in the directory tree concurrently and
+// returns the valid results in directory order
 func LoadRacesFolder(directoryPath string) (TeamTrialResultSet, error) {
 	resultSet := TeamTrialResultSet{}
 	var paths []string
@@ -31,18 +33,17 @@ func LoadRacesFolder(directoryPath string) (TeamTrialResultSet, error) {
 		return resultSet, err
 	}
 
-	// Pre-size the slice so order is retained
+	// Each worker writes its own index, so the results keep the directory order
 	parsed := make([]*TeamTrialResult, len(paths))
 	var g errgroup.Group
 	g.SetLimit(runtime.GOMAXPROCS(0))
 	for i, path := range paths {
 		g.Go(func() error {
+			// A file that fails to parse or validate is skipped
 			teamTrialResult, err := LoadRaces(path)
-			// If parsing race results fails, just skip it
 			if err != nil {
 				return nil
 			}
-			// Check correctness of data
 			if !teamTrialResult.IsValidData() {
 				return nil
 			}
@@ -60,6 +61,7 @@ func LoadRacesFolder(directoryPath string) (TeamTrialResultSet, error) {
 	return resultSet, nil
 }
 
+// LoadRaces reads and parses one team trial result file
 func LoadRaces(path string) (TeamTrialResult, error) {
 	var teamTrialRace TeamTrialResult
 	if path == "" {

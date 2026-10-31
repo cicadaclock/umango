@@ -1,4 +1,4 @@
-// Interface for handling the data from veterans.json in memory
+// Package veteran reads veterans.json files and calculates legacy affinity.
 package veteran
 
 import (
@@ -9,22 +9,18 @@ import (
 	"github.com/ichiban/soa"
 )
 
+// Veteran is one trained uma in a veterans.json file
 //go:generate go tool soagen
 type Veteran struct {
-	// Metadata
-
-	// Veteran ID that is unique locally to your account
+	// Veteran ID, unique within the player's account
 	LocalVeteranId int `json:"trained_chara_id"`
-	// Veteran card ID that determines the chara
+	// Card ID, which identifies the chara and outfit
 	CardId     int    `json:"card_id"`
 	CreateTime string `json:"create_time"`
 	RankScore  int    `json:"rank_score"`
-	// Sparks
-	FactorIdArray []int `json:"factor_id_array"`
-	// Skills
-	SkillArray []Skill `json:"skill_array"`
-
-	// Racing stats
+	// Factor IDs of the veteran's own factors
+	FactorIdArray []int   `json:"factor_id_array"`
+	SkillArray    []Skill `json:"skill_array"`
 
 	Speed   int `json:"speed"`
 	Stamina int `json:"stamina"`
@@ -32,41 +28,33 @@ type Veteran struct {
 	Guts    int `json:"guts"`
 	Wit     int `json:"wiz"`
 
-	// Legacy/affinity calcs
-
-	// Legacy parent and grandparent umas
+	// Legacy parents and grandparents of the veteran
 	SuccessionCharaArray []SuccessionChara `json:"succession_chara_array"`
-	// Races placed 1st in
+	// Win saddle IDs in ascending order
 	WinSaddleIdArray []int `json:"win_saddle_id_array"`
-	// Epithets
+	// Epithet IDs
 	NicknameIdArray []int `json:"nickname_id_array"`
 }
 
+// Skill is one skill of an uma and its level
 type Skill struct {
 	SkillId int `json:"skill_id"`
 	Level   int `json:"level"`
 }
 
-// Legacy parent and grandparent
+// SuccessionChara is one legacy parent or grandparent of a veteran
 type SuccessionChara struct {
-	// Veteran card ID that determines the chara
+	// Card ID, which identifies the chara and outfit
 	CardId int `json:"card_id"`
-	// Sparks
+	// Factor IDs of this member's own factors
 	FactorIdArray []int `json:"factor_id_array"`
-	// Races placed 1st in
+	// Win saddle IDs in ascending order
 	WinSaddleIdArray []int `json:"win_saddle_id_array"`
-	// Legacy position (parent 1 or 2, grandparent 1 or 2)
+	// Position in the legacy tree; 10 and 20 are the veteran's two parents
 	PositionId int `json:"position_id"`
 }
 
-// Decode reads a veterans.json document into a VeteranSlice.
-//
-// Inputs:
-// - r: Reader positioned at a JSON array of veterans
-//
-// Returns:
-// - veterans: Decoded veterans, garbage collected and owned by the caller
-// - err: JSON decoding failure
+// Decode reads a veterans.json document into a VeteranSlice
 func Decode(r io.Reader) (*VeteranSlice, error) {
 	var veterans []Veteran
 	if err := json.NewDecoder(r).Decode(&veterans); err != nil {

@@ -1,5 +1,4 @@
-// Interface for querying master.mdb directly
-
+// Package db reads tables from the game's master.mdb SQLite database.
 package db
 
 import (
@@ -10,8 +9,8 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+// text_data categories that the application reads
 const (
-	// text_data categories
 	textDataCardId    = 4
 	textDataCharaName = 6
 	textDataSkills    = 47
@@ -20,18 +19,18 @@ const (
 	textDataTTBonus   = 148
 )
 
+// DB is a read-only connection to master.mdb
 type DB struct {
 	SqlDB *sql.DB
 }
 
-// Create DB struct with connection to master.mdb
+// Open opens a read-only connection to master.mdb at the install path of this platform
 func Open() (*DB, error) {
 	dbPath, err := DBPath()
 	if err != nil {
 		return nil, fmt.Errorf("getting master.mdb path: %w", err)
 	}
-	// master.mdb is static data, open it read-only immutable to skip locking
-	// and journal checks
+	// master.mdb is static, so immutable skips locking and journal checks
 	dsn := "file:" + filepath.ToSlash(dbPath) + "?mode=ro&immutable=1"
 	sqlDb, err := sql.Open("sqlite", dsn)
 	if err != nil {
@@ -40,7 +39,7 @@ func Open() (*DB, error) {
 	return &DB{SqlDB: sqlDb}, nil
 }
 
-// Map card_id to chara_id from card_data
+// CardData returns the chara ID of each card ID
 func (db *DB) CardData() (map[int]int, error) {
 	result, err := queryMap[int](db.SqlDB, "SELECT t.id, t.chara_id FROM card_data AS t")
 	if err != nil {
@@ -49,7 +48,7 @@ func (db *DB) CardData() (map[int]int, error) {
 	return result, nil
 }
 
-// Map relation_type to relation_point from succession_relation
+// SuccessionRelations returns the affinity points of each succession relation type
 func (db *DB) SuccessionRelations() (map[int]int, error) {
 	result, err := queryMap[int](db.SqlDB, "SELECT t.relation_type, t.relation_point FROM succession_relation AS t")
 	if err != nil {
@@ -58,7 +57,7 @@ func (db *DB) SuccessionRelations() (map[int]int, error) {
 	return result, nil
 }
 
-// Map chara_id to []relation_type from succession_relation_member
+// SuccessionRelationMembers returns the succession relation types that include each chara ID
 func (db *DB) SuccessionRelationMembers() (map[int][]int, error) {
 	rows, err := db.SqlDB.Query("SELECT t.chara_id, t.relation_type FROM succession_relation_member AS t")
 	if err != nil {
@@ -78,7 +77,7 @@ func (db *DB) SuccessionRelationMembers() (map[int][]int, error) {
 	return result, rows.Err()
 }
 
-// Map factor_id to factor_type from succession_factor
+// SuccessionFactors returns the factor type of each factor ID
 func (db *DB) SuccessionFactors() (map[int]int, error) {
 	result, err := queryMap[int](db.SqlDB, "SELECT t.factor_id, t.factor_type FROM succession_factor AS t")
 	if err != nil {
@@ -87,7 +86,7 @@ func (db *DB) SuccessionFactors() (map[int]int, error) {
 	return result, nil
 }
 
-// Maps raw_score_id to score from team_stadium_raw_score
+// TeamStadiumRawScores returns the base score of each team trial raw score ID
 func (db *DB) TeamStadiumRawScores() (map[int]int, error) {
 	result, err := queryMap[int](db.SqlDB, "SELECT t.id, t.score FROM team_stadium_raw_score AS t")
 	if err != nil {
@@ -96,7 +95,7 @@ func (db *DB) TeamStadiumRawScores() (map[int]int, error) {
 	return result, nil
 }
 
-// RaceInstanceDistances maps each race_instance id to the length of its course in meters
+// RaceInstanceDistances returns the course distance in meters of each race instance ID
 func (db *DB) RaceInstanceDistances() (map[int]int, error) {
 	result, err := queryMap[int](db.SqlDB, `SELECT ri.id, rcs.distance FROM race_instance AS ri
 		JOIN race AS r ON r.id = ri.race_id
@@ -107,7 +106,7 @@ func (db *DB) RaceInstanceDistances() (map[int]int, error) {
 	return result, nil
 }
 
-// Map skill_id to text from text_data
+// TextDataSkills returns the name of each skill ID
 func (db *DB) TextDataSkills() (map[int]string, error) {
 	result, err := db.textData(textDataSkills, 0, 0, false)
 	if err != nil {
@@ -116,7 +115,7 @@ func (db *DB) TextDataSkills() (map[int]string, error) {
 	return result, nil
 }
 
-// Map factor_id to text from text_data
+// TextDataFactors returns the name of each factor ID
 func (db *DB) TextDataFactors() (map[int]string, error) {
 	result, err := db.textData(textDataFactors, 0, 0, false)
 	if err != nil {
@@ -125,7 +124,7 @@ func (db *DB) TextDataFactors() (map[int]string, error) {
 	return result, nil
 }
 
-// Map chara_id to text from text_data
+// TextDataCharaName returns the name of each chara ID
 func (db *DB) TextDataCharaName() (map[int]string, error) {
 	result, err := db.textData(textDataCharaName, 0, 0, false)
 	if err != nil {
@@ -134,7 +133,7 @@ func (db *DB) TextDataCharaName() (map[int]string, error) {
 	return result, nil
 }
 
-// Map card_id to text from text_data
+// TextDataVeteranCardId returns the title and name of each card ID
 func (db *DB) TextDataVeteranCardId() (map[int]string, error) {
 	result, err := db.textData(textDataCardId, 0, 0, false)
 	if err != nil {
@@ -143,7 +142,8 @@ func (db *DB) TextDataVeteranCardId() (map[int]string, error) {
 	return result, nil
 }
 
-// Map index to text from text_data
+// textData returns the text of each index in a text_data category. When maxIndex is above 0,
+// only indices between minIndex and maxIndex are read, or only those outside when between is false.
 func (db *DB) textData(category, minIndex, maxIndex int, between bool) (map[int]string, error) {
 	if minIndex > maxIndex {
 		return nil, fmt.Errorf("minimum index larger than max index")
@@ -160,7 +160,7 @@ func (db *DB) textData(category, minIndex, maxIndex int, between bool) (map[int]
 	return queryMap[string](db.SqlDB, query)
 }
 
-// Scan the rows of a two column query into a map
+// queryMap runs a query of two columns and returns the second column keyed by the first
 func queryMap[V int | string](sqlDB *sql.DB, query string) (map[int]V, error) {
 	rows, err := sqlDB.Query(query)
 	if err != nil {

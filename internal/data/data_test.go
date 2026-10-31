@@ -5,6 +5,7 @@ import (
 	"testing"
 )
 
+// setup loads master.mdb from the local game install, which these tests require
 func setup(t *testing.T) *DataStore {
 	dataStore, err := Init()
 	if err != nil {
@@ -13,6 +14,7 @@ func setup(t *testing.T) *DataStore {
 	return dataStore
 }
 
+// TestFactorNames checks the names of stat, aptitude, race, skill and unique skill factors
 func TestFactorNames(t *testing.T) {
 	dataStore := setup(t)
 
@@ -44,6 +46,7 @@ func TestFactorNames(t *testing.T) {
 	}
 }
 
+// TestMapVeteranCardIdToCharaId checks the chara ID of a card ID
 func TestMapVeteranCardIdToCharaId(t *testing.T) {
 	dataStore := setup(t)
 
@@ -55,6 +58,7 @@ func TestMapVeteranCardIdToCharaId(t *testing.T) {
 	}
 }
 
+// TestMapVeteranCardIdToCharaName checks the chara name of a card ID
 func TestMapVeteranCardIdToCharaName(t *testing.T) {
 	dataStore := setup(t)
 
@@ -66,6 +70,7 @@ func TestMapVeteranCardIdToCharaName(t *testing.T) {
 	}
 }
 
+// TestMapVeteranCardIdToCharaTitle checks the title and name of a card ID
 func TestMapVeteranCardIdToCharaTitle(t *testing.T) {
 	dataStore := setup(t)
 

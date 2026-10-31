@@ -1,15 +1,12 @@
 package races
 
-// ScoreCategory groups the score events an uma earns in a team trial race by what earned them
+// ScoreCategory groups score events and score bonuses by what earned them
 type ScoreCategory int
 
-// Score categories in display order: the bonuses, then the race result, skills and running
+// Score categories in display order: the bonuses first, then the score events
 const (
-	// Bonus points every event earns for the opponent team's rating
 	OpponentRatingScore ScoreCategory = iota
-	// Bonus points the events of the team's ace earn
 	AceScore
-	// Bonus points every event earns during a win streak
 	StreakScore
 	PlacementScore
 	MarginScore
@@ -21,11 +18,13 @@ const (
 	StrongStartScore
 	PositioningScore
 	RushedScore
-	// Score events whose ID the categories predate
+	// Score events whose raw score ID has no category
 	OtherScore
+	// Number of score categories
 	ScoreCategoryCount
 )
 
+// String returns the display name of the score category
 func (c ScoreCategory) String() string {
 	switch c {
 	case PlacementScore:
@@ -58,8 +57,8 @@ func (c ScoreCategory) String() string {
 	return "Other"
 }
 
-// scoreCategoryOf returns the category of a ScoreEvent.RawScoreId, an ID of master.mdb's
-// team_stadium_raw_score, where each category spans a contiguous run of IDs
+// scoreCategoryOf returns the category of a team_stadium_raw_score ID. Each category is a
+// contiguous range of IDs.
 func scoreCategoryOf(rawScoreId int) ScoreCategory {
 	switch {
 	case rawScoreId < 1:
@@ -88,8 +87,8 @@ func scoreCategoryOf(rawScoreId int) ScoreCategory {
 	return OtherScore
 }
 
-// bonusCategoryOf returns the category of a ScoreBonus.ScoreBonusId, an ID of master.mdb's
-// team_stadium_score_bonus, or false for a bonus that stays in its event's category
+// bonusCategoryOf returns the category of a team_stadium_score_bonus ID. The support bonus has
+// no category and stays in the category of its score event.
 func bonusCategoryOf(scoreBonusId int) (ScoreCategory, bool) {
 	switch scoreBonusId {
 	case 1:
@@ -102,10 +101,11 @@ func bonusCategoryOf(scoreBonusId int) (ScoreCategory, bool) {
 	return OtherScore, false
 }
 
-// ScoreBreakdown holds points by ScoreCategory. Each event category includes the support bonus
-// applied to its events, while the other bonuses count toward their own categories.
+// ScoreBreakdown holds the points of one uma in each score category
 type ScoreBreakdown [ScoreCategoryCount]int
 
+// add adds the points of score events. A bonus with its own category counts there, not in the
+// category of its score event.
 func (b *ScoreBreakdown) add(events []ScoreEvent) {
 	for _, event := range events {
 		points := event.Score

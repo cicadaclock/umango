@@ -1,42 +1,39 @@
 package races
 
-// Result of a single team trial round
+// RaceResult is the result of one team trial round
 type RaceResult struct {
 	DistanceType DistanceType `json:"distance_type"`
-	// Base64-encoded compressed race scenario blob
-	//
-	// Format is base64 -> gzip -> little-endian binary
+	// Encoded race scenario: base64 of gzip of the binary scenario format
 	RaceScenario     string        `json:"race_scenario"`
 	Round            int           `json:"round"`
 	CharaResultArray []CharaResult `json:"chara_result_array"`
 }
 
-// Result of a single uma in a team trial round
+// CharaResult is the result of one uma in a team trial round
 type CharaResult struct {
-	TrainedCharaId int `json:"trained_chara_id"`
-	TeamId         int `json:"team_id"`
-	// Scoring events earned during the race
+	TrainedCharaId  int          `json:"trained_chara_id"`
+	TeamId          int          `json:"team_id"`
 	ScoreEventArray []ScoreEvent `json:"score_array"`
 }
 
+// ScoreEvent is one score event earned by an uma, such as a placement or a skill activation
 type ScoreEvent struct {
-	// Type of score (lengths, placement, skills, rushed, etc.)
+	// team_stadium_raw_score ID in master.mdb
 	RawScoreId int `json:"raw_score_id"`
-	// Final score value for a given scoring event: its base score times the number of times it
-	// occurred, plus its bonuses
-	Score int `json:"score"`
-	// Bonuses comprising the raw score (minus base score)
+	// Base score times the number of occurrences, plus every bonus in BonusArray
+	Score      int          `json:"score"`
 	BonusArray []ScoreBonus `json:"bonus_array"`
 }
 
-// Bonus applied to a score
+// ScoreBonus is one bonus included in the score of a score event
 type ScoreBonus struct {
-	// Type of bonus score (Opponent rating, support bonus, ace bonus, streak)
+	// team_stadium_score_bonus ID in master.mdb
 	ScoreBonusId int `json:"score_bonus_id"`
 	Score        int `json:"bonus_score"`
 }
 
-// Find chara results from a single race
+// FindCharaResults returns the result of the uma with the trained chara ID, or a zero
+// CharaResult when the uma did not race in the round
 func (raceResult RaceResult) FindCharaResults(trainedCharaId int) CharaResult {
 	for _, charaResult := range raceResult.CharaResultArray {
 		if charaResult.TrainedCharaId == trainedCharaId {
@@ -46,7 +43,7 @@ func (raceResult RaceResult) FindCharaResults(trainedCharaId int) CharaResult {
 	return CharaResult{}
 }
 
-// Total bonus score of all charas in a single race
+// BonusScore returns the total bonus score of every uma in the round
 func (raceResult RaceResult) BonusScore() int {
 	sum := 0
 	for _, charaResult := range raceResult.CharaResultArray {
@@ -55,7 +52,7 @@ func (raceResult RaceResult) BonusScore() int {
 	return sum
 }
 
-// Total score of a single chara
+// TotalScore returns the total score of the uma in the round
 func (charaResult CharaResult) TotalScore() int {
 	sum := 0
 	for _, scoreEvent := range charaResult.ScoreEventArray {
@@ -64,7 +61,7 @@ func (charaResult CharaResult) TotalScore() int {
 	return sum
 }
 
-// Bonus score of a single chara
+// BonusScore returns the bonus score of the uma in the round
 func (charaResult CharaResult) BonusScore() int {
 	sum := 0
 	for _, scoreEvent := range charaResult.ScoreEventArray {
@@ -75,7 +72,7 @@ func (charaResult CharaResult) BonusScore() int {
 	return sum
 }
 
-// Decodes the RaceScenario blob of this race
+// DecodeScenario decodes the race scenario of the round
 func (raceResult RaceResult) DecodeScenario() (RaceScenario, error) {
 	return DecodeRaceScenario(raceResult.RaceScenario)
 }
