@@ -7,7 +7,6 @@ import (
 	"image/color"
 	"log"
 
-	"gioui.org/font"
 	"gioui.org/layout"
 	"gioui.org/op"
 	"gioui.org/op/clip"
@@ -39,12 +38,10 @@ const (
 	// A star suffix is a prefix of this string, so suffixes never allocate
 	starSuffixes = " ★★★★★★★★★"
 
-	veteranPanelTitle  = "Veteran List"
-	loadButtonText     = "Load veterans file…"
-	emptyListText      = "Load a veterans file to list the factors of each veteran"
-	loadButtonPaddingX = unit.Dp(12)
-	loadButtonPaddingY = unit.Dp(6)
-	loadErrorGap       = unit.Dp(10)
+	veteranPanelTitle = "Veteran List"
+	loadButtonText    = "Load veterans file…"
+	emptyListText     = "Load a veterans file to list the factors of each veteran"
+	loadErrorGap      = unit.Dp(10)
 )
 
 // factorType is a succession_factor factor_type, which selects the color and display row of a
@@ -273,37 +270,15 @@ func (p *veteranPage) layout(
 
 // layoutToolbar draws the load button and the last load error
 func (p *veteranPage) layoutToolbar(gtx layout.Context, theme *material.Theme) layout.Dimensions {
-	inset := layout.Inset{
-		Top:    toolbarPadding,
-		Bottom: toolbarPadding,
-		Left:   veteranPadding,
-		Right:  veteranPadding,
-	}
-	dims := inset.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+	return layoutPageToolbar(gtx, func(gtx layout.Context) layout.Dimensions {
 		return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				if p.choosing {
-					gtx = gtx.Disabled()
-				}
-				button := material.Button(theme, &p.loadButton, loadButtonText)
-				button.TextSize = smallTextSize
-				button.Font.Weight = font.SemiBold
-				button.CornerRadius = controlRadius
-				button.Inset = layout.Inset{
-					Top:    loadButtonPaddingY,
-					Bottom: loadButtonPaddingY,
-					Left:   loadButtonPaddingX,
-					Right:  loadButtonPaddingX,
-				}
-				return button.Layout(gtx)
+				return layoutActionButton(gtx, theme, &p.loadButton, loadButtonText, p.choosing)
 			}),
 			layout.Rigid(layout.Spacer{Width: loadErrorGap}.Layout),
 			layout.Flexed(1, textLabel(theme, smallTextSize, p.loadError, colorError).Layout),
 		)
 	})
-	line := gtx.Dp(borderWidth)
-	fillRect(gtx, colorBorder, image.Rect(0, dims.Size.Y-line, dims.Size.X, dims.Size.Y))
-	return dims
 }
 
 // layoutList draws the veteran list centered in the content width

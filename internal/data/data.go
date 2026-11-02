@@ -31,6 +31,8 @@ type DataStore struct {
 	veteranCardId map[int]string
 	// Chara ID to chara name
 	charaNames map[int]string
+	// Race track ID to race track name
+	raceTrackNames map[int]string
 }
 
 // Init opens master.mdb and loads every lookup table into memory concurrently
@@ -52,6 +54,7 @@ func Init() (*DataStore, error) {
 	g.Go(func() (err error) { dataStore.factorNames, err = db.TextDataFactors(); return })
 	g.Go(func() (err error) { dataStore.veteranCardId, err = db.TextDataVeteranCardId(); return })
 	g.Go(func() (err error) { dataStore.charaNames, err = db.TextDataCharaName(); return })
+	g.Go(func() (err error) { dataStore.raceTrackNames, err = db.TextDataRaceTracks(); return })
 	g.Go(func() (err error) { dataStore.factorType, err = db.SuccessionFactors(); return })
 	g.Go(func() (err error) { dataStore.ttRawScores, err = db.TeamStadiumRawScores(); return })
 	g.Go(func() (err error) { dataStore.courseDistances, err = db.RaceInstanceDistances(); return })
@@ -145,6 +148,11 @@ func (dataStore *DataStore) CardChara(cardId int) int {
 // CharaName returns the name of a chara ID
 func (dataStore *DataStore) CharaName(charaId int) string {
 	return dataStore.charaNames[charaId]
+}
+
+// RaceTrackName returns the name of a race track ID
+func (dataStore *DataStore) RaceTrackName(raceTrackId int) string {
+	return dataStore.raceTrackNames[raceTrackId]
 }
 
 // CourseDistance returns the course distance in meters of a race instance ID, or 0 when unknown

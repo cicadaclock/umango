@@ -13,6 +13,7 @@ import (
 const (
 	textDataCardId    = 4
 	textDataCharaName = 6
+	textDataRaceTrack = 31
 	textDataSkills    = 47
 	textDataFactors   = 147
 	textDataTTScore   = 140
@@ -129,6 +130,15 @@ func (db *DB) TextDataCharaName() (map[int]string, error) {
 	result, err := db.textData(textDataCharaName, 0, 0, false)
 	if err != nil {
 		return nil, fmt.Errorf("get chara id: %w", err)
+	}
+	return result, nil
+}
+
+// TextDataRaceTracks returns the name of each race track ID
+func (db *DB) TextDataRaceTracks() (map[int]string, error) {
+	result, err := db.textData(textDataRaceTrack, 0, 0, false)
+	if err != nil {
+		return nil, fmt.Errorf("get race tracks: %w", err)
 	}
 	return result, nil
 }

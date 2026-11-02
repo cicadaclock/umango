@@ -1,0 +1,16 @@
+[package]
+name = "racesim"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+uma_race_sim = { path = "../../uma-race-simulator" }
+
+# Whole-program optimization: slower to build once, faster at every race
+[profile.release]
+lto = "fat"
+codegen-units = 1

@@ -5,6 +5,7 @@ import (
 	"image/color"
 
 	"gioui.org/f32"
+	"gioui.org/font"
 	"gioui.org/io/pointer"
 	"gioui.org/layout"
 	"gioui.org/op"
@@ -29,6 +30,11 @@ const (
 	pillPaddingX   = unit.Dp(10)
 	pillPaddingY   = unit.Dp(4)
 	scrollbarWidth = unit.Dp(6)
+	// Space between the edge of a page toolbar and its controls
+	pageToolbarPaddingX = unit.Dp(10)
+	// Space between the edge of an action button and its label
+	actionButtonPaddingX = unit.Dp(12)
+	actionButtonPaddingY = unit.Dp(6)
 )
 
 // Dark palette with one orange accent for focus, selection and data. Tints are opaque, because
@@ -131,6 +137,44 @@ func strokeRRect(gtx layout.Context, c color.NRGBA, r image.Rectangle, radius in
 	r.Max = r.Max.Sub(image.Pt(width, width))
 	path := clip.UniformRRect(r, radius).Path(gtx.Ops)
 	paint.FillShape(gtx.Ops, c, clip.Stroke{Path: path, Width: float32(width)}.Op())
+}
+
+// layoutPageToolbar draws the controls of a page above a divider
+func layoutPageToolbar(gtx layout.Context, controls layout.Widget) layout.Dimensions {
+	inset := layout.Inset{
+		Top:    toolbarPadding,
+		Bottom: toolbarPadding,
+		Left:   pageToolbarPaddingX,
+		Right:  pageToolbarPaddingX,
+	}
+	dims := inset.Layout(gtx, controls)
+	line := gtx.Dp(borderWidth)
+	fillRect(gtx, colorBorder, image.Rect(0, dims.Size.Y-line, dims.Size.X, dims.Size.Y))
+	return dims
+}
+
+// layoutActionButton draws a filled button with a label, which ignores input while disabled
+func layoutActionButton(
+	gtx layout.Context,
+	theme *material.Theme,
+	clickable *widget.Clickable,
+	label string,
+	disabled bool,
+) layout.Dimensions {
+	if disabled {
+		gtx = gtx.Disabled()
+	}
+	button := material.Button(theme, clickable, label)
+	button.TextSize = smallTextSize
+	button.Font.Weight = font.SemiBold
+	button.CornerRadius = controlRadius
+	button.Inset = layout.Inset{
+		Top:    actionButtonPaddingY,
+		Bottom: actionButtonPaddingY,
+		Left:   actionButtonPaddingX,
+		Right:  actionButtonPaddingX,
+	}
+	return button.Layout(gtx)
 }
 
 // layoutPill draws label in an outlined capsule button. A nonzero highlight marks the pill as

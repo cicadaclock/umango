@@ -44,19 +44,29 @@ const (
 	// Cap height of Inter in ems
 	interCapHeight = 0.727
 	// Space between the wordmark and the first page tab
-	wordmarkGap                   = unit.Dp(18)
-	tabPadding                    = unit.Dp(10)
-	tabIndicatorHeight            = unit.Dp(2)
-	loadingIndicatorSize          = unit.Dp(28)
-	loadingTextGap                = unit.Dp(14)
-	tabTeamTrials, tabVeteranList = 0, 1
-	tabCount                      = 2
-	loadingText                   = "Loading master.mdb and saved races…"
-	loadingErrorPrefix            = "Failed to load master.mdb:\n"
+	wordmarkGap          = unit.Dp(18)
+	tabPadding           = unit.Dp(10)
+	tabIndicatorHeight   = unit.Dp(2)
+	loadingIndicatorSize = unit.Dp(28)
+	loadingTextGap       = unit.Dp(14)
+	loadingText          = "Loading master.mdb and saved races…"
+	loadingErrorPrefix   = "Failed to load master.mdb:\n"
+)
+
+// Page tabs of the top bar, indexing screen.tabs
+const (
+	tabTeamTrials = iota
+	tabVeteranList
+	tabSimulator
+	tabCount
 )
 
 var (
-	tabTitles = [tabCount]string{tabTeamTrials: "TT Chart", tabVeteranList: "Veteran List"}
+	tabTitles = [tabCount]string{
+		tabTeamTrials:  "TT Chart",
+		tabVeteranList: "Veteran List",
+		tabSimulator:   "Simulator",
+	}
 
 	// Weight instances of the Inter variable font that the full shaper adds
 	interInstances = [...]struct {
@@ -168,6 +178,7 @@ type screen struct {
 	activeTab  int
 	teamTrials *teamTrialsPage
 	veterans   *veteranPage
+	simulator  *simulatorPage
 	// TT page data reloaded by the results watcher, holding at most one pending reload
 	reloads chan teamTrialsData
 }
@@ -226,6 +237,7 @@ func (s *screen) applyLoad(result loadResult) {
 	s.theme.Shaper = result.shaper
 	s.teamTrials = result.teamTrials
 	s.veterans = newVeteranPage(result.dataStore)
+	s.simulator = newSimulatorPage(result.dataStore)
 	go watchTeamTrialResults(result.resultsDir, result.dataStore, s.deliverReload)
 }
 
@@ -258,8 +270,11 @@ func (s *screen) layout(gtx layout.Context) layout.Dimensions {
 		layout.Rigid(s.layoutTopBar),
 		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 			return layout.UniformInset(gutterWidth).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				if s.activeTab == tabVeteranList {
+				switch s.activeTab {
+				case tabVeteranList:
 					return s.veterans.layout(gtx, s.theme, s.explorer, s.window.Invalidate)
+				case tabSimulator:
+					return s.simulator.layout(gtx, s.theme, s.explorer, s.window.Invalidate)
 				}
 				return s.teamTrials.layout(gtx, s.theme)
 			})

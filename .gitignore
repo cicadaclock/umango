@@ -7,6 +7,10 @@ temp/
 *.code-workspace
 *_debug_bin*
 
+# Race engine library, game data and build outputs
+/racesim/
+/engine/target/
+
 # Builds
 umango.exe
 umango
