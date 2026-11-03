@@ -4,6 +4,7 @@ package racesim
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"syscall"
 	"unsafe"
@@ -11,7 +12,7 @@ import (
 
 const (
 	// Interface version of the engine library that this package calls
-	interfaceVersion = 1
+	interfaceVersion = 3
 	// Longest failure text that this package reads from the library
 	errorTextCapacity = 1024
 )
@@ -21,7 +22,15 @@ type Engine struct {
 	// Game data that the library holds
 	data uintptr
 
-	prepare, release, run, lastError *syscall.LazyProc
+	prepare, release, run, releaseSkillSpans, lastError *syscall.LazyProc
+}
+
+// trialOutput is what the library stores for one run, in the layout of its TrialOutput
+type trialOutput struct {
+	outcomes       *RunnerOutcome
+	outcomeCount   uintptr
+	skillSpans     *SkillSpan
+	skillSpanCount uintptr
 }
 
 // PreparedRace identifies a field and course that the library holds for repeated runs
@@ -36,12 +45,14 @@ func Open(files Files) (*Engine, error) {
 	version := library.NewProc("racesim_interface_version")
 	open := library.NewProc("racesim_open")
 	e := &Engine{
-		prepare:   library.NewProc("racesim_prepare_saved_race"),
-		release:   library.NewProc("racesim_release"),
-		run:       library.NewProc("racesim_run"),
-		lastError: library.NewProc("racesim_last_error"),
+		prepare:           library.NewProc("racesim_prepare_saved_race"),
+		release:           library.NewProc("racesim_release"),
+		run:               library.NewProc("racesim_run"),
+		releaseSkillSpans: library.NewProc("racesim_release_skill_spans"),
+		lastError:         library.NewProc("racesim_last_error"),
 	}
-	for _, proc := range [...]*syscall.LazyProc{version, open, e.prepare, e.release, e.run, e.lastError} {
+	procs := [...]*syscall.LazyProc{version, open, e.prepare, e.release, e.run, e.releaseSkillSpans, e.lastError}
+	for _, proc := range procs {
 		if err := proc.Find(); err != nil {
 			return nil, fmt.Errorf("race engine library has no function %s: %w", proc.Name, err)
 		}
@@ -82,21 +93,25 @@ func (e *Engine) Release(race PreparedRace) {
 	e.release.Call(uintptr(race))
 }
 
-// Run simulates one race from a seed and stores the finish order of each runner, counted from 0,
-// in finishOrder, which holds one element per runner in gate order
-func (e *Engine) Run(race PreparedRace, seed int32, finishOrder []int32) error {
-	if len(finishOrder) == 0 {
-		return errors.New("run race: the race has no runners")
+// Run simulates one race per seed on all processor threads, stores the outcome of each runner and
+// returns every skill span in seed order. The outcomes of seed k occupy the elements from
+// k * runners in gate order, so outcomes holds len(seeds) * runners elements. The library
+// overwrites the elements on each run.
+func (e *Engine) Run(race PreparedRace, seeds []int32, outcomes []RunnerOutcome) ([]SkillSpan, error) {
+	if len(seeds) == 0 || len(outcomes) == 0 {
+		return nil, errors.New("run race: the run has no seeds or the race has no runners")
 	}
+	output := trialOutput{outcomes: &outcomes[0], outcomeCount: uintptr(len(outcomes))}
 	status, _, _ := e.run.Call(
 		e.data,
 		uintptr(race),
-		uintptr(uint32(seed)),
-		uintptr(unsafe.Pointer(&finishOrder[0])),
-		uintptr(len(finishOrder)),
+		uintptr(unsafe.Pointer(&seeds[0])),
+		uintptr(len(seeds)),
+		uintptr(unsafe.Pointer(&output)),
 	)
 	if status != 0 {
-		return fmt.Errorf("run race: %w", e.lastFailure())
+		return nil, fmt.Errorf("run race: %w", e.lastFailure())
 	}
-	return nil
+	defer e.releaseSkillSpans.Call(uintptr(unsafe.Pointer(output.skillSpans)), output.skillSpanCount)
+	return slices.Clone(unsafe.Slice(output.skillSpans, output.skillSpanCount)), nil
 }

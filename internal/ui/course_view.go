@@ -23,21 +23,25 @@ import (
 
 const (
 	coursePaddingX      = unit.Dp(14)
-	coursePaddingTop    = unit.Dp(6)
-	coursePaddingBottom = unit.Dp(4)
+	coursePaddingTop    = unit.Dp(4)
+	coursePaddingBottom = unit.Dp(2)
 	courseTitleHeight   = unit.Dp(24)
-	courseHillHeight    = unit.Dp(34)
+	courseHillHeight    = unit.Dp(20)
 	courseGrassHeight   = unit.Dp(2)
-	courseRowHeight     = unit.Dp(34)
-	courseRowBandHeight = unit.Dp(3)
-	courseRulerHeight   = unit.Dp(22)
-	courseAxisHeight    = unit.Dp(18)
-	courseTickWidth     = unit.Dp(1)
-	courseTickHeight    = unit.Dp(4)
-	courseLabelInset    = unit.Dp(2)
-	courseMarkerGap     = unit.Dp(4)
-	courseTitleSize     = unit.Sp(14)
-	courseMarkerSize    = unit.Sp(10)
+	courseRowHeight     = unit.Dp(22)
+	courseRowBandHeight = unit.Dp(2)
+	courseRulerHeight   = unit.Dp(16)
+	courseAxisHeight    = unit.Dp(16)
+	// Widths left and right of the strips, which the skill rows share so that both have one
+	// distance scale
+	courseLabelWidth = unit.Dp(176)
+	courseValueWidth = unit.Dp(56)
+	courseTickWidth  = unit.Dp(1)
+	courseTickHeight = unit.Dp(4)
+	courseLabelInset = unit.Dp(2)
+	courseMarkerGap  = unit.Dp(4)
+	courseTitleSize  = unit.Sp(14)
+	courseMarkerSize = unit.Sp(10)
 
 	// A course divides into 24 sections
 	courseSectionCount = 24
@@ -50,6 +54,12 @@ const (
 	// so that a slight slope does not look like a steep one.
 	courseMinHillRange = 4.0
 	gradientPerMeter   = 10000
+	// Lines of the course title beside the strips
+	courseTitleMaxLines = 4
+	// Index in courseLegBounds of the start of the late race, where the last spurt can begin
+	courseLateRaceLeg = 2
+	// Index in courseView.rows of the row of straights and corners
+	courseSectionRow = 1
 	// A corner counts down to corner 4, the last corner before each straight
 	cornersPerLap = 4
 
@@ -117,6 +127,8 @@ type courseRow struct {
 	base, band color.NRGBA
 	spans      []courseSpan
 	markers    []courseMarker
+	// Left and right of each label drawn in the current frame
+	labelRanges [][2]int
 }
 
 // courseView holds the content of the loaded course, built outside the window goroutine. It draws
@@ -133,9 +145,9 @@ type courseView struct {
 	axisLabels             []courseMarker
 }
 
-// newCourseView returns a view of a course with only its title and a note
-func newCourseNote(title, note string) *courseView {
-	return &courseView{title: title, note: note}
+// newCourseNote returns a view of a course with only its title and a note
+func newCourseNote(title, note string, distance int) *courseView {
+	return &courseView{title: title, note: note, distance: float64(distance)}
 }
 
 // newCourseView returns a view of a course with its layout
@@ -304,29 +316,55 @@ func rowMarkers(spans []courseSpan, distance float64) []courseMarker {
 	return markers
 }
 
-// layout draws the title above the course strips, or above the note when there is no layout
+// courseTrackBounds returns the left and right of the distance scale that the course strips and
+// the skill rows share
+func courseTrackBounds(gtx layout.Context) (left, right int) {
+	left = gtx.Dp(courseLabelWidth)
+	return left, max(gtx.Constraints.Max.X-gtx.Dp(courseValueWidth), left+1)
+}
+
+// sectionMarkers returns the boundaries of the straights and corners, none without a layout
+func (v *courseView) sectionMarkers() []courseMarker {
+	if v.note != "" {
+		return nil
+	}
+	return v.rows[courseSectionRow].markers
+}
+
+// layout draws the title beside the course strips, or above the note when there is no layout
 func (v *courseView) layout(gtx layout.Context, theme *material.Theme) layout.Dimensions {
 	width := gtx.Constraints.Max.X
-	paddingX := gtx.Dp(coursePaddingX)
-	inner := max(width-2*paddingX, 1)
-	y := gtx.Dp(coursePaddingTop)
-
-	title, titleSize := recordCourseText(gtx, theme, courseTitleSize, v.title, colorText, font.SemiBold)
-	titleHeight := gtx.Dp(courseTitleHeight)
-	placeCourseText(gtx, title, image.Pt((width-titleSize.X)/2, y+(titleHeight-titleSize.Y)/2))
-	y += titleHeight
+	border := gtx.Dp(borderWidth)
+	fillRect(gtx, colorBorder, image.Rect(0, 0, width, border))
+	y := border + gtx.Dp(coursePaddingTop)
 
 	if v.note != "" {
+		title, titleSize := recordCourseText(gtx, theme, courseTitleSize, v.title, colorText, font.SemiBold)
+		titleHeight := gtx.Dp(courseTitleHeight)
+		placeCourseText(gtx, title, image.Pt((width-titleSize.X)/2, y+(titleHeight-titleSize.Y)/2))
+		y += titleHeight
 		note, noteSize := recordCourseText(gtx, theme, smallTextSize, v.note, colorTextMuted, font.Normal)
 		placeCourseText(gtx, note, image.Pt((width-noteSize.X)/2, y))
-		y += noteSize.Y + gtx.Dp(coursePaddingBottom)
-	} else {
-		offset := op.Offset(image.Pt(paddingX, y)).Push(gtx.Ops)
-		y += v.layoutStrips(gtx, theme, inner) + gtx.Dp(coursePaddingBottom)
-		offset.Pop()
+		return layout.Dimensions{Size: image.Pt(width, y+noteSize.Y+gtx.Dp(coursePaddingBottom))}
 	}
-	fillRect(gtx, colorBorder, image.Rect(0, y, width, y+gtx.Dp(borderWidth)))
-	return layout.Dimensions{Size: image.Pt(width, y+gtx.Dp(borderWidth))}
+
+	left, right := courseTrackBounds(gtx)
+	offset := op.Offset(image.Pt(left, y)).Push(gtx.Ops)
+	stripHeight := v.layoutStrips(gtx, theme, right-left)
+	offset.Pop()
+
+	paddingX := gtx.Dp(coursePaddingX)
+	title := textLabel(theme, textSize, v.title, colorText)
+	title.Font.Weight = font.SemiBold
+	title.MaxLines = courseTitleMaxLines
+	title.WrapPolicy = text.WrapWords
+	titleGtx := gtx
+	titleGtx.Constraints = layout.Constraints{Max: image.Pt(left-2*paddingX, stripHeight)}
+	macro := op.Record(gtx.Ops)
+	titleDims := title.Layout(titleGtx)
+	titleCall := macro.Stop()
+	placeCourseText(gtx, titleCall, image.Pt(paddingX, y+(stripHeight-titleDims.Size.Y)/2))
+	return layout.Dimensions{Size: image.Pt(width, y+stripHeight+gtx.Dp(coursePaddingBottom))}
 }
 
 // layoutStrips draws the hill area, the rows, the section ruler and the distance axis at the
@@ -381,6 +419,7 @@ func (row *courseRow) layout(
 		fillRect(gtx, row.band, image.Rect(0, height-band, width, height))
 	}
 	inset := gtx.Dp(courseLabelInset)
+	row.labelRanges = row.labelRanges[:0]
 	for i := range row.spans {
 		span := &row.spans[i]
 		left, right := int(span.start*scale), int(span.end*scale)
@@ -391,14 +430,16 @@ func (row *courseRow) layout(
 			call, size = recordCourseText(gtx, theme, smallTextSize, span.shortLabel, colorTextBright, font.SemiBold)
 		}
 		if size.X+2*inset <= right-left {
-			placeCourseText(gtx, call, image.Pt((left+right-size.X)/2, inset))
+			x := (left + right - size.X) / 2
+			placeCourseText(gtx, call, image.Pt(x, inset))
+			row.labelRanges = append(row.labelRanges, [2]int{x, x + size.X})
 		}
 	}
 	row.layoutMarkers(gtx, theme, width, height-band, scale)
 }
 
 // layoutMarkers draws the distance markers along the bottom of the row, leaving out each marker
-// that would touch the one before it
+// that would touch the one before it or a span label
 func (row *courseRow) layoutMarkers(
 	gtx layout.Context,
 	theme *material.Theme,
@@ -411,12 +452,22 @@ func (row *courseRow) layoutMarkers(
 		marker := &row.markers[i]
 		call, size := recordCourseText(gtx, theme, courseMarkerSize, marker.text, colorCourseMarker, font.Normal)
 		x := max(min(int(marker.meters*scale)-size.X/2, width-size.X), 0)
-		if x < nextFree {
+		if x < nextFree || row.touchesLabel(x-gap, x+size.X+gap) {
 			continue
 		}
 		placeCourseText(gtx, call, image.Pt(x, bottom-size.Y))
 		nextFree = x + size.X + gap
 	}
+}
+
+// touchesLabel reports whether a horizontal range overlaps a label drawn in the current frame
+func (row *courseRow) touchesLabel(left, right int) bool {
+	for _, label := range row.labelRanges {
+		if left < label[1] && label[0] < right {
+			return true
+		}
+	}
+	return false
 }
 
 // layoutRuler draws the numbered sections and returns its height

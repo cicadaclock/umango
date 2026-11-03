@@ -107,6 +107,24 @@ func (db *DB) RaceInstanceDistances() (map[int]int, error) {
 	return result, nil
 }
 
+// SkillNeedPoints returns the skill point cost of each skill ID, before any hint discount
+func (db *DB) SkillNeedPoints() (map[int]int, error) {
+	result, err := queryMap[int](db.SqlDB, "SELECT t.id, t.need_skill_point FROM single_mode_skill_need_point AS t")
+	if err != nil {
+		return nil, fmt.Errorf("single_mode_skill_need_point: %w", err)
+	}
+	return result, nil
+}
+
+// SkillRarities returns the rarity of each skill ID
+func (db *DB) SkillRarities() (map[int]int, error) {
+	result, err := queryMap[int](db.SqlDB, "SELECT t.id, t.rarity FROM skill_data AS t")
+	if err != nil {
+		return nil, fmt.Errorf("skill_data: %w", err)
+	}
+	return result, nil
+}
+
 // TextDataSkills returns the name of each skill ID
 func (db *DB) TextDataSkills() (map[int]string, error) {
 	result, err := db.textData(textDataSkills, 0, 0, false)

@@ -8,6 +8,12 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// skill_data rarity values of the skills that upgrade another skill
+const (
+	skillRarityWhite = 1
+	skillRarityGold  = 2
+)
+
 // DataStore holds the master.mdb lookup tables in memory
 type DataStore struct {
 	// Card ID to chara ID
@@ -22,6 +28,10 @@ type DataStore struct {
 	ttRawScores map[int]int
 	// Race instance ID to course distance in meters
 	courseDistances map[int]int
+	// Skill ID to skill point cost before any hint discount
+	skillNeedPoints map[int]int
+	// Skill ID to rarity
+	skillRarities map[int]int
 
 	// Skill ID to skill name
 	skillNames map[int]string
@@ -58,11 +68,36 @@ func Init() (*DataStore, error) {
 	g.Go(func() (err error) { dataStore.factorType, err = db.SuccessionFactors(); return })
 	g.Go(func() (err error) { dataStore.ttRawScores, err = db.TeamStadiumRawScores(); return })
 	g.Go(func() (err error) { dataStore.courseDistances, err = db.RaceInstanceDistances(); return })
+	g.Go(func() (err error) { dataStore.skillNeedPoints, err = db.SkillNeedPoints(); return })
+	g.Go(func() (err error) { dataStore.skillRarities, err = db.SkillRarities(); return })
 	if err := g.Wait(); err != nil {
 		return &dataStore, fmt.Errorf("load db data: %w", err)
 	}
 
 	return &dataStore, nil
+}
+
+// TotalSkillPoints returns the skill point cost of learned skills before any hint discount. A gold
+// skill includes the cost of the white skill that it upgrades, and a double circle skill includes
+// the cost of its single circle form.
+func (dataStore *DataStore) TotalSkillPoints(skillIds []int) int {
+	total := 0
+	for _, id := range skillIds {
+		total += dataStore.skillNeedPoints[id]
+		switch dataStore.skillRarities[id] {
+		case skillRarityGold:
+			upgraded := id - 1
+			if id%10 == 1 {
+				upgraded = id + 1
+			}
+			total += dataStore.skillNeedPoints[upgraded]
+		case skillRarityWhite:
+			if id%10 == 1 && dataStore.skillRarities[id+1] == skillRarityWhite {
+				total += dataStore.skillNeedPoints[id+1]
+			}
+		}
+	}
+	return total
 }
 
 // SkillNames returns the name of each skill ID

@@ -28,6 +28,6 @@ func (*Engine) Prepare([]byte) (PreparedRace, error) {
 func (*Engine) Release(PreparedRace) {}
 
 // Run reports that this platform cannot load the engine library
-func (*Engine) Run(PreparedRace, int32, []int32) error {
-	return errUnsupported
+func (*Engine) Run(PreparedRace, []int32, []RunnerOutcome) ([]SkillSpan, error) {
+	return nil, errUnsupported
 }

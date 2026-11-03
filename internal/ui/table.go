@@ -37,8 +37,10 @@ type tableColumn struct {
 	// Side of the square icon that layoutIcon draws in place of the cell text; 0 draws the text
 	icon unit.Dp
 	// The column takes the width that the other columns leave
-	fill      bool
-	alignment text.Alignment
+	fill bool
+	// A fill column keeps at least the width of its widest cell
+	fillFitsCells bool
+	alignment     text.Alignment
 }
 
 // tableView draws a table of text columns under a fixed header row. Column widths are fitted at
@@ -55,7 +57,11 @@ type tableView struct {
 	headerClicks []gesture.Click
 	rowClicks    []gesture.Click
 	rowHeight    unit.Dp
-	selectable   bool
+	// Height of the header row; 0 means the height of a row
+	headerHeight unit.Dp
+	// Lines of text that a cell holds, separated by newlines; 0 means one line
+	cellLines  int
+	selectable bool
 	// Rows highlighted as the selection and the comparison, -1 when none
 	selectedRow, comparedRow int
 	sortColumn               int
@@ -150,6 +156,9 @@ func (tv *tableView) layout(gtx layout.Context, theme *material.Theme) layout.Di
 			if axis == layout.Horizontal {
 				return tv.pixelWidths[index]
 			}
+			if index == 0 && tv.headerHeight > 0 {
+				return gtx.Dp(tv.headerHeight)
+			}
 			return rowHeight
 		},
 		func(gtx layout.Context, col int) layout.Dimensions {
@@ -164,6 +173,17 @@ func (tv *tableView) layout(gtx layout.Context, theme *material.Theme) layout.Di
 	return dims
 }
 
+// contentHeight returns the height that shows the header and every row without scrolling
+func (tv *tableView) contentHeight(gtx layout.Context, theme *material.Theme) int {
+	table := component.Table(theme, &tv.grid)
+	styleScrollbar(&table.HScrollbarStyle)
+	header := tv.rowHeight
+	if tv.headerHeight > 0 {
+		header = tv.headerHeight
+	}
+	return gtx.Dp(header) + tv.rowCount()*gtx.Dp(tv.rowHeight) + gtx.Dp(table.HScrollbarStyle.Width())
+}
+
 // fitColumns sizes each column to its header and sort arrow, and to its icon, sample or
 // widest cell
 func (tv *tableView) fitColumns(gtx layout.Context, theme *material.Theme) {
@@ -176,14 +196,14 @@ func (tv *tableView) fitColumns(gtx layout.Context, theme *material.Theme) {
 		header := measureLabel(gtx, headerLabel(theme, tv.headers[col], colorText)).X + arrow
 		content := 0
 		switch {
-		case style.fill:
+		case style.fill && !style.fillFitsCells:
 		case style.icon > 0:
 			content = gtx.Dp(style.icon)
 		case style.sample != "":
-			content = measureLabel(gtx, textLabel(theme, textSize, style.sample, colorText)).X
+			content = measureLabel(gtx, tv.cellLabel(theme, style.sample, colorText)).X
 		default:
 			for _, s := range tv.columns[col] {
-				content = max(content, measureLabel(gtx, textLabel(theme, textSize, s, colorText)).X)
+				content = max(content, measureLabel(gtx, tv.cellLabel(theme, s, colorText)).X)
 			}
 		}
 		tv.widths[col] = unit.Dp(float32(max(header, content)+2*padding) / gtx.Metric.PxPerDp)
@@ -313,7 +333,7 @@ func (tv *tableView) layoutCell(
 	if highlighted {
 		c = colorTextBright
 	}
-	label := textLabel(theme, textSize, tv.columns[col][row], c)
+	label := tv.cellLabel(theme, tv.columns[col][row], c)
 	label.Alignment = style.alignment
 	padding := gtx.Dp(tableCellPadding)
 	width := max(size.X-2*padding, 0)
@@ -324,6 +344,13 @@ func (tv *tableView) layoutCell(
 	defer op.Offset(image.Pt(padding, (size.Y-dims.Size.Y)/2)).Push(gtx.Ops).Pop()
 	call.Add(gtx.Ops)
 	return layout.Dimensions{Size: size}
+}
+
+// cellLabel returns the style of the label of a cell
+func (tv *tableView) cellLabel(theme *material.Theme, s string, c color.NRGBA) material.LabelStyle {
+	label := textLabel(theme, textSize, s, c)
+	label.MaxLines = max(tv.cellLines, 1)
+	return label
 }
 
 // headerLabel returns the style of a header label

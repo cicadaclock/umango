@@ -8,10 +8,11 @@ import (
 	"io/fs"
 	"log"
 	"math/rand/v2"
-	"strconv"
+	"slices"
 
 	"gioui.org/layout"
-	"gioui.org/text"
+	"gioui.org/op"
+	"gioui.org/op/paint"
 	"gioui.org/unit"
 	"gioui.org/widget"
 	"gioui.org/widget/material"
@@ -27,25 +28,31 @@ const (
 	checkFilesButtonText = "Check Again"
 	emptySimulatorText   = "Import a Champions Meeting race file to simulate the race"
 	missingFilesText     = "The simulator requires these missing files:"
-	placeHeader          = "Place"
-	placementUmaHeader   = "Uma"
-	placementRowHeight   = unit.Dp(32)
 	missingFileGap       = unit.Dp(6)
 	missingFilePadding   = unit.Dp(16)
 	simulatorButtonGap   = unit.Dp(8)
+	// Races that one trial simulates, whose averages the placement table shows
+	racesPerTrial = 100
 )
+
+// simulatorDetail states what the values of the placement table are
+var simulatorDetail = fmt.Sprintf("Average of %d simulated races", racesPerTrial)
 
 // simulation carries the result of a background simulation to the window goroutine
 type simulation struct {
 	// Cell text of the placement table, one slice per column
 	columns [][]string
+	// Gate index of the runner on each row of the placement table
+	rowRunners []int
+	// Skill activity of each runner in gate order
+	skillViews []skillActivityView
 	// View of the course of a newly imported race, nil after a trial of the same race
 	course *courseView
 	err    error
 }
 
-// simulatorPage simulates the field of a saved Champions Meeting race from the race's seed, then
-// from a random seed at each new trial
+// simulatorPage simulates the field of a saved Champions Meeting race in trials of racesPerTrial
+// races: the first trial from the race's seed, then from a random seed at each new trial
 type simulatorPage struct {
 	dataStore                              *data.DataStore
 	panel                                  panel
@@ -55,6 +62,10 @@ type simulatorPage struct {
 	missing                                []string
 	errorText                              string
 	course                                 *courseView
+	rowRunners                             []int
+	skillViews                             []skillActivityView
+	skillList                              widget.List
+	skillKey                               paint.ImageOp
 	// Whether every required engine file exists
 	filesReady bool
 	// Whether a race is prepared and whether the table holds a result
@@ -68,8 +79,13 @@ type simulatorPage struct {
 	// Layout of every course, read at the first import that finds the file
 	courseLayouts map[int]racesim.CourseLayout
 	race          racesim.PreparedRace
-	names         []string
-	finishOrder   []int32
+	runners       []racesim.Runner
+	// Course distance of the prepared race in meters
+	courseDistance float64
+	// Skill points of each runner in gate order
+	skillPoints []int
+	// Outcomes of the last trial
+	outcomes []racesim.RunnerOutcome
 }
 
 // newSimulatorPage returns a simulator page that has checked for the engine files
@@ -78,12 +94,9 @@ func newSimulatorPage(dataStore *data.DataStore) *simulatorPage {
 		dataStore: dataStore,
 		panel:     panel{title: simulatorPanelTitle},
 		results:   make(chan simulation, 1),
-		table: newTableView(
-			[]string{placeHeader, placementUmaHeader},
-			[]tableColumn{{sample: "18", alignment: text.End}, {fill: true}},
-			placementRowHeight,
-			false,
-		),
+		table:     newPlacementTable(),
+		skillList: widget.List{List: layout.List{Axis: layout.Vertical}},
+		skillKey:  newSkillKeyImage(),
 	}
 	p.checkFiles()
 	return p
@@ -109,6 +122,9 @@ func (p *simulatorPage) update(gtx layout.Context, picker *explorer.Explorer, in
 		p.busy = true
 		go p.runTrial(invalidate)
 	}
+	if _, row, _ := p.table.update(gtx); row >= 0 {
+		p.selectRow(row)
+	}
 	select {
 	case result := <-p.results:
 		p.busy = false
@@ -120,14 +136,36 @@ func (p *simulatorPage) update(gtx layout.Context, picker *explorer.Explorer, in
 		default:
 			p.errorText = ""
 			p.hasRace, p.hasResult = true, true
-			p.table.setColumns(result.columns)
-			p.table.scrollToTop()
-			if result.course != nil {
-				p.course = result.course
-			}
+			p.applyResult(&result)
 		}
 	default:
 	}
+}
+
+// applyResult shows the result of a trial. The selected runner stays selected through a new trial
+// of the same race, and importing a race clears the selection.
+func (p *simulatorPage) applyResult(result *simulation) {
+	selected := -1
+	if result.course != nil {
+		p.course = result.course
+	} else if p.table.selectedRow >= 0 {
+		selected = p.rowRunners[p.table.selectedRow]
+	}
+	p.rowRunners, p.skillViews = result.rowRunners, result.skillViews
+	p.table.selectedRow = slices.Index(p.rowRunners, selected)
+	p.table.setColumns(result.columns)
+	p.table.widths = nil
+	p.table.scrollToTop()
+}
+
+// selectRow selects the runner of a row, or clears the selection when the row is already selected
+func (p *simulatorPage) selectRow(row int) {
+	if row == p.table.selectedRow {
+		p.table.selectedRow = -1
+		return
+	}
+	p.table.selectedRow = row
+	p.skillList.Position = layout.Position{}
 }
 
 // chooseRace waits for the file picker, then imports and simulates the chosen race file outside
@@ -149,7 +187,7 @@ func (p *simulatorPage) runTrial(invalidate func()) {
 	p.results <- p.simulate(rand.Int32())
 }
 
-// importRace prepares the field and course of a race file and simulates it from the race's seed.
+// importRace prepares the field and course of a race file and simulates a trial from the race's seed.
 // The engine starts at the first import, so that it costs nothing at application startup.
 func (p *simulatorPage) importRace(source io.Reader) simulation {
 	savedRace, err := io.ReadAll(source)
@@ -173,8 +211,13 @@ func (p *simulatorPage) importRace(source io.Reader) simulation {
 	if p.race != 0 {
 		p.engine.Release(p.race)
 	}
-	p.race, p.names = prepared, race.Names
-	p.finishOrder = make([]int32, len(race.Names))
+	p.race, p.runners = prepared, race.Runners
+	p.courseDistance = float64(race.Course.Distance)
+	p.skillPoints = make([]int, len(race.Runners))
+	for i := range race.Runners {
+		p.skillPoints[i] = p.dataStore.TotalSkillPoints(race.Runners[i].SkillIds)
+	}
+	p.outcomes = make([]racesim.RunnerOutcome, racesPerTrial*len(race.Runners))
 	result := p.simulate(race.Seed)
 	result.course = p.viewOfCourse(&race)
 	return result
@@ -188,36 +231,62 @@ func (p *simulatorPage) viewOfCourse(race *racesim.Race) *courseView {
 		path := p.files.CourseLayoutPath()
 		layouts, err := racesim.LoadCourseLayouts(path)
 		if errors.Is(err, fs.ErrNotExist) {
-			return newCourseNote(title, fmt.Sprintf(courseLayoutMissingFormat, path))
+			return newCourseNote(title, fmt.Sprintf(courseLayoutMissingFormat, path), race.Course.Distance)
 		}
 		if err != nil {
 			log.Printf("load course layouts: %v", err)
-			return newCourseNote(title, err.Error())
+			return newCourseNote(title, err.Error(), race.Course.Distance)
 		}
 		p.courseLayouts = layouts
 	}
 	layout, ok := p.courseLayouts[race.Course.Id]
 	if !ok {
-		return newCourseNote(title, fmt.Sprintf(courseLayoutAbsentFormat, race.Course.Id))
+		return newCourseNote(title, fmt.Sprintf(courseLayoutAbsentFormat, race.Course.Id), race.Course.Distance)
 	}
 	return newCourseView(title, race.Course.Distance, &layout)
 }
 
-// simulate runs the prepared race from a seed and returns the placement table
-func (p *simulatorPage) simulate(seed int32) simulation {
-	if err := p.engine.Run(p.race, seed, p.finishOrder); err != nil {
+// simulate runs a trial of the prepared race and returns the placement table
+func (p *simulatorPage) simulate(firstSeed int32) simulation {
+	seeds := trialSeeds(firstSeed)
+	spans, err := p.engine.Run(p.race, seeds[:], p.outcomes)
+	if err != nil {
 		return simulation{err: err}
 	}
-	places := make([]string, len(p.finishOrder))
-	names := make([]string, len(p.finishOrder))
-	for runner, order := range p.finishOrder {
-		places[order] = strconv.Itoa(int(order) + 1)
-		names[order] = p.names[runner]
+	summaries := racesim.Summarize(p.outcomes, len(p.runners))
+	activities := racesim.SummarizeSkills(spans, len(p.runners), p.courseDistance)
+	rows := make([]placementRow, len(p.runners))
+	skillViews := make([]skillActivityView, len(p.runners))
+	for i := range rows {
+		rows[i] = placementRow{
+			gate:        i + 1,
+			runner:      &p.runners[i],
+			skillPoints: p.skillPoints[i],
+			summary:     &summaries[i],
+		}
+		skillViews[i] = newSkillActivityView(p.dataStore, &p.runners[i], activities[i])
 	}
-	return simulation{columns: [][]string{places, names}}
+	columns := placementCells(rows)
+	rowRunners := make([]int, len(rows))
+	for i := range rows {
+		rowRunners[i] = rows[i].gate - 1
+	}
+	return simulation{columns: columns, rowRunners: rowRunners, skillViews: skillViews}
 }
 
-// layout draws the toolbar above the missing files, the course and placements, or an instruction
+// trialSeeds returns the seeds of a trial. The first seed determines the others, so a race file
+// gives the same averages each time that it is imported. The first values of the engine's generator
+// follow a regular pattern across consecutive seeds, so the others do not count up from the first.
+func trialSeeds(first int32) [racesPerTrial]int32 {
+	generator := rand.New(rand.NewPCG(uint64(first), 0))
+	seeds := [racesPerTrial]int32{first}
+	for i := 1; i < racesPerTrial; i++ {
+		seeds[i] = generator.Int32()
+	}
+	return seeds
+}
+
+// layout draws the toolbar above the missing files, the simulation result, or an instruction
 func (p *simulatorPage) layout(
 	gtx layout.Context,
 	theme *material.Theme,
@@ -225,7 +294,11 @@ func (p *simulatorPage) layout(
 	invalidate func(),
 ) layout.Dimensions {
 	p.update(gtx, picker, invalidate)
-	return p.panel.layout(gtx, theme, true, "", func(gtx layout.Context) layout.Dimensions {
+	detail := ""
+	if p.hasResult {
+		detail = simulatorDetail
+	}
+	return p.panel.layout(gtx, theme, true, detail, func(gtx layout.Context) layout.Dimensions {
 		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				return p.layoutToolbar(gtx, theme)
@@ -235,19 +308,44 @@ func (p *simulatorPage) layout(
 				case len(p.missing) > 0:
 					return p.layoutMissingFiles(gtx, theme)
 				case p.hasResult:
-					return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							return p.course.layout(gtx, theme)
-						}),
-						layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-							return p.table.layout(gtx, theme)
-						}),
-					)
+					return p.layoutResult(gtx, theme)
 				}
 				return layoutCenteredText(gtx, theme, emptySimulatorText, colorTextMuted)
 			}),
 		)
 	})
+}
+
+// layoutResult draws the placements above the course and the skill activity of the selected
+// runner. The table takes the height of its rows and gives up height only when the window is too
+// short for the course and the skill rows.
+func (p *simulatorPage) layoutResult(gtx layout.Context, theme *material.Theme) layout.Dimensions {
+	macro := op.Record(gtx.Ops)
+	courseDims := p.course.layout(gtx, theme)
+	course := macro.Stop()
+	selected := p.table.selectedRow >= 0
+	reserved := courseDims.Size.Y
+	if selected {
+		reserved += gtx.Dp(skillListMinimumHeight)
+	}
+	tableHeight := min(p.table.contentHeight(gtx, theme), max(gtx.Constraints.Max.Y-reserved, 0))
+	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			gtx.Constraints.Max.Y = tableHeight
+			return p.table.layout(gtx, theme)
+		}),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			course.Add(gtx.Ops)
+			return courseDims
+		}),
+		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+			if !selected {
+				return layoutCenteredText(gtx, theme, selectRunnerText, colorTextMuted)
+			}
+			view := &p.skillViews[p.rowRunners[p.table.selectedRow]]
+			return view.layout(gtx, theme, &p.skillList, p.course, p.skillKey)
+		}),
+	)
 }
 
 // layoutToolbar draws the buttons that apply to the state of the engine files and the last error
