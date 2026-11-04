@@ -1,6 +1,7 @@
 package racesim
 
 import (
+	"cmp"
 	"math/rand/v2"
 	"slices"
 	"sync/atomic"
@@ -16,6 +17,10 @@ const (
 	SkillSurveyBatches = 10
 	// Races per course of a complete skill survey
 	SkillSurveyRaces = SkillSurveyBatches * SkillSurveyBatchRaces
+	// Batches that every skill runs before the survey continues with only the contenders
+	surveyFirstStageBatches = 3
+	// Skills of each score column that continue after the first stage
+	surveyContendersPerColumn = 30
 	// Lone Wolf, which skill surveys leave out
 	excludedSkillId = 201641
 )
@@ -167,6 +172,8 @@ type SkillSurveyConfig struct {
 	Skills []db.GeneralSkill
 	// The rows of team_stadium_raw_score
 	ScoreRules []db.ScoreRule
+	// Returns the skill point cost of learned skills, before any hint discount
+	SkillPoints func(skillIds []int) int
 }
 
 // SkillSummary is the result of one skill over a pool of courses. A rate is a share from 0 to 1.
@@ -174,6 +181,10 @@ type SkillSummary struct {
 	SkillId int
 	// The lower tier that the runner owns and the skill would replace, otherwise 0
 	ReplacedSkillId int
+	// Skill points that the runner would spend beyond the lower tier, before any hint discount
+	SkillPoints int
+	// Races per course behind the win and score changes. A skill outside the contenders stops early.
+	RacesPerCourse int
 	// Rate of races in which the skill activated, over all courses of the pool
 	ProcRate float64
 	// Mean change of the win rate
@@ -210,8 +221,14 @@ type SkillSurveyReport struct {
 // surveyTally adds up the outcomes of one skill over all courses
 type surveyTally struct {
 	activated, winDelta, scoreDelta int64
+	// Skill points that the runner would spend beyond the lower tier
+	skillPoints int
+	// Races per course whose win and score changes are added
+	racesPerCourse int
 	// Whether the skill can activate on some course
 	possible bool
+	// Whether the skill runs no more races
+	stopped bool
 }
 
 // courseTrial is the skills and races of one course
@@ -228,7 +245,7 @@ type skillSurvey struct {
 	skillIds, replacedIds []int32
 	tallies               []surveyTally
 	courseCount           int
-	// Races per course whose win and score changes are added
+	// Races per course of the batches that finished
 	racesPerCourse int
 	// Over all courses
 	baselineScore, baselineWins int64
@@ -236,10 +253,10 @@ type skillSurvey struct {
 
 // RunSkillSurvey simulates each skill that the runner could learn on every course of the pool. A
 // first pass of watching races gives the baselines and every proc rate. Batches of races then
-// measure what each skill changes, on only the races where it activated. It reports after the first
-// pass, after each course run and after each batch, and returns when the survey completes or soon
-// after stop is set. The seeds follow from the round's seed, so a repeated survey gives the same
-// result.
+// measure what each skill changes, on only the races where it activated. After the first stage only
+// the contenders of each score column run on. It reports after the first pass, after each course run
+// and after each batch, and returns when the survey completes or soon after stop is set. The seeds
+// follow from the round's seed, so a repeated survey gives the same result.
 func RunSkillSurvey(config *SkillSurveyConfig, stop *atomic.Bool, report func(SkillSurveyReport)) error {
 	race, err := config.Engine.Prepare(config.Round.SavedRace)
 	if err != nil {
@@ -266,6 +283,9 @@ func RunSkillSurvey(config *SkillSurveyConfig, stop *atomic.Bool, report func(Sk
 	totalRate := int64(0)
 	for i := range config.Conditions {
 		totalRate += int64(config.Conditions[i].Rate)
+	}
+	for k := range skillIds {
+		survey.tallies[k].skillPoints = skillPointsBeyondTier(config.SkillPoints, skillIds[k], replacedIds[k])
 	}
 	for c := range trials {
 		if stop.Load() {
@@ -298,6 +318,7 @@ func RunSkillSurvey(config *SkillSurveyConfig, stop *atomic.Bool, report func(Sk
 	state.Summaries = nil
 
 	began := time.Now()
+	plannedRaces, racesDone := survey.expectedRaces(trials), 0
 	for batch := range SkillSurveyBatches {
 		for c := range trials {
 			if stop.Load() {
@@ -309,12 +330,17 @@ func RunSkillSurvey(config *SkillSurveyConfig, stop *atomic.Bool, report func(Sk
 				return err
 			}
 			survey.addOutcomes(t)
+			racesDone += countRaces(view.Activations)
 			state.CourseRuns++
-			runsLeft := state.TotalCourseRuns - state.CourseRuns
-			state.SecondsLeft = time.Since(began).Seconds() * float64(runsLeft) / float64(state.CourseRuns)
+			racesLeft := max(plannedRaces-racesDone, 0)
+			state.SecondsLeft = time.Since(began).Seconds() * float64(racesLeft) / float64(max(racesDone, 1))
 			report(state)
 		}
-		survey.racesPerCourse += SkillSurveyBatchRaces
+		survey.finishBatch()
+		if batch+1 == surveyFirstStageBatches {
+			survey.stopOutsideContenders(trials)
+			plannedRaces = racesDone + racesAfterBatch(trials, batch)
+		}
 		state.RacesPerCourse = survey.racesPerCourse
 		state.Summaries = survey.summaries()
 		report(state)
@@ -446,6 +472,93 @@ func (s *skillSurvey) addWatchingRaces(t *courseTrial) {
 	}
 }
 
+// skillPointsBeyondTier returns what a skill costs beyond the lower tier that it would replace
+func skillPointsBeyondTier(skillPoints func([]int) int, skillId, replacedId int32) int {
+	points := skillPoints([]int{int(skillId)})
+	if replacedId != 0 {
+		points -= skillPoints([]int{int(replacedId)})
+	}
+	return points
+}
+
+// countRaces returns the races that activation flags call for. A race runs when its flag is set.
+func countRaces(activations []uint8) int {
+	races := 0
+	for _, flag := range activations {
+		if flag != 0 {
+			races++
+		}
+	}
+	return races
+}
+
+// racesAfterBatch returns the races that remain on all courses after a batch
+func racesAfterBatch(trials []courseTrial, batch int) int {
+	races := 0
+	for c := range trials {
+		t := &trials[c]
+		races += countRaces(t.trial.Activations[(batch+1)*SkillSurveyBatchRaces*len(t.trial.SkillIds):])
+	}
+	return races
+}
+
+// expectedRaces estimates the races of the whole survey before the contenders are known: the first
+// stage, then the share of the later races that the contenders would hold at most.
+func (s *skillSurvey) expectedRaces(trials []courseTrial) int {
+	later := racesAfterBatch(trials, surveyFirstStageBatches-1)
+	total := racesAfterBatch(trials, -1)
+	share := min(float64(2*surveyContendersPerColumn)/float64(max(s.possibleSkillCount(), 1)), 1)
+	return total - later + int(float64(later)*share)
+}
+
+// finishBatch counts a batch that every course ran for the skills that still run
+func (s *skillSurvey) finishBatch() {
+	s.racesPerCourse += SkillSurveyBatchRaces
+	for i := range s.tallies {
+		if !s.tallies[i].stopped {
+			s.tallies[i].racesPerCourse = s.racesPerCourse
+		}
+	}
+}
+
+// stopOutsideContenders stops each skill outside the leaders of both score columns. Its later races
+// lose their flags, so the engine does not run them, and its result stays what the first stage found.
+func (s *skillSurvey) stopOutsideContenders(trials []courseTrial) {
+	indexes := make([]int, 0, len(s.tallies))
+	for i := range s.tallies {
+		if s.tallies[i].possible {
+			indexes = append(indexes, i)
+		}
+	}
+	keep := make([]bool, len(s.tallies))
+	markLeaders := func(value func(*surveyTally) float64) {
+		slices.SortStableFunc(indexes, func(a, b int) int {
+			return cmp.Compare(value(&s.tallies[b]), value(&s.tallies[a]))
+		})
+		for _, i := range indexes[:min(surveyContendersPerColumn, len(indexes))] {
+			keep[i] = true
+		}
+	}
+	markLeaders(func(t *surveyTally) float64 { return float64(t.scoreDelta) })
+	markLeaders(func(t *surveyTally) float64 { return float64(t.scoreDelta) / float64(max(t.skillPoints, 1)) })
+	for i := range s.tallies {
+		s.tallies[i].stopped = !keep[i]
+	}
+	firstLaterRow := surveyFirstStageBatches * SkillSurveyBatchRaces
+	for c := range trials {
+		t := &trials[c]
+		count := len(t.skillIndexes)
+		for k, index := range t.skillIndexes {
+			if keep[index] {
+				continue
+			}
+			for row := firstLaterRow; row < SkillSurveyRaces; row++ {
+				t.trial.Activations[row*count+k] = 0
+			}
+		}
+	}
+}
+
 // addOutcomes adds the outcomes of one batch of one course
 func (s *skillSurvey) addOutcomes(t *courseTrial) {
 	for i, k := range t.skillIndexes {
@@ -480,15 +593,17 @@ func (s *skillSurvey) baseline() SkillSurveyBaseline {
 func (s *skillSurvey) summaries() []SkillSummary {
 	summaries := make([]SkillSummary, 0, len(s.tallies))
 	watched := float64(SkillSurveyRaces * s.courseCount)
-	measured := float64(max(s.racesPerCourse, 1) * s.courseCount)
 	for i := range s.tallies {
 		tally := &s.tallies[i]
 		if !tally.possible {
 			continue
 		}
+		measured := float64(max(tally.racesPerCourse, 1) * s.courseCount)
 		summaries = append(summaries, SkillSummary{
 			SkillId:         int(s.skillIds[i]),
 			ReplacedSkillId: int(s.replacedIds[i]),
+			SkillPoints:     tally.skillPoints,
+			RacesPerCourse:  tally.racesPerCourse,
 			ProcRate:        float64(tally.activated) / watched,
 			WinDelta:        float64(tally.winDelta) / measured,
 			ScoreDelta:      float64(tally.scoreDelta) / measured,

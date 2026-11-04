@@ -10,16 +10,14 @@ Race simulation runs on [our fork](https://github.com/cicadaclock/uma-race-simul
 ./build_engine.sh
 ```
 
-This uses the fork in `../uma-race-simulator`, cloning it there if needed, then builds `racesim/racesim.dll` and installs its game data to `racesim/data`. The game data belongs to Cygames, Inc. and is not part of this repository.
+This uses the fork in `../uma-race-simulator`, cloning it there if needed, then builds `racesim/racesim.dll` and installs its game data to `racesim/data`. With `rustup component add llvm-tools-preview` and a saved team trial result, the build is profile guided: it runs sample skill surveys for a few minutes, and the engine runs about 10% faster. `./build_engine.sh --quick` skips that. The game data belongs to Cygames, Inc. and is not part of this repository.
 
 `racesim/courses.json` holds the course layouts that the course view draws, which is not included with Umango. You will need to provide your own. Races simulate without it.
 
 ## Skill analysis
 
-The Skill Analysis tab tests which skills suit one uma of a team on the team trial courses of a category. Pick a category and an uma from your latest saved team trial. The field of that round then runs on every course of the category's pool, with season, weather and ground drawn at the game's rates and the gates shuffled in each race.
+The Skill Analysis tab tests every possible skill on an existing TT uma. Pick a TT category and an uma from your latest saved team trial race. The field of that round runs on every racecourse of the category's pool, with randomized season, weather, and ground condition, and gates shuffled per race.
 
-Each skill that the uma could still learn and that can activate on some course of the pool first watches 100 races per course alongside all the others, without affecting them. Those races are the baseline and give every proc rate within seconds. A skill then races for real, one at a time, on only the races where it activated, because a race where it did not activate would not change. The table refreshes every 10 races per course, up to 100, and you can stop at any time. A full run takes a few minutes.
+Skills are filtered out based on whether they can activate on the course and strategy of your uma. Remaining skills are simulated 100 times to get the average score gain per skill. The table runs 10 races per course, up to 100, and can be stopped at any time. A full run takes a few minutes.
 
-The table shows how often each skill activates, how much it changes the win rate, and how much team trial score it adds for each skill point. The score is what the uma earns in the race before the ace, opponent rating, streak and support bonuses. The skill point cost is before any hint discount, and an upgrade costs only what it adds beyond the tier that the uma owns.
-
-master.mdb does not list the team trial pool. Umango derives it from race group 9 and the race instances that saved team trials use, so check it again after a game update adds courses.
+Score is what the uma earns in the race minus the ace, opponent rating, streak and support bonus scores. This means if your uma runs out of stamina consistently, then stamina skills may add more score than what the skill is worth as your uma may now be able to finish 1/2/3. The skill point cost is before any hint discount, and an upgrade costs only what it adds beyond the previous skill tier.

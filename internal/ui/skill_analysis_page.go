@@ -29,11 +29,13 @@ const (
 	watchingRacesText       = "Watching %d races per course for skill activations…"
 	missingEngineText       = "The race engine files are missing, as the Simulator tab lists"
 	findingSkillsText       = "Finding skills that can activate…"
-	skillAnalysisCaption    = "Proc%: share of races in which the skill activated. Win: change of the win rate. " +
+	skillAnalysisCaption    = "Proc%: races in which the skill activated. Win: change of win rate. " +
 		"Average marginal score: points per race before bonuses, including races without an activation. " +
-		"Score per SP: that average per skill point."
-	skillAnalysisEmptyCell = "-"
-	skillAnalysisRowHeight = unit.Dp(26)
+		"Score per SP: that average per skill point. ~: fewer races."
+	// Marks a value of a skill that stopped before the contenders
+	skillAnalysisFewerRacesMark = "~"
+	skillAnalysisEmptyCell      = "-"
+	skillAnalysisRowHeight      = unit.Dp(26)
 	// Space between the groups of controls in the toolbar
 	skillAnalysisGroupGap = unit.Dp(14)
 	skillAnalysisCaptionY = unit.Dp(6)
@@ -55,6 +57,20 @@ type skillAnalysisRow struct {
 	summary       racesim.SkillSummary
 	// Whether the win and score changes hold races yet
 	measured bool
+	// Whether the skill stopped on fewer races than the contenders
+	fewerRaces bool
+}
+
+// measuredCell returns the text of a measured value, or the empty cell before any race
+func (row *skillAnalysisRow) measuredCell(format string, value float64) string {
+	if !row.measured {
+		return skillAnalysisEmptyCell
+	}
+	text := fmt.Sprintf(format, value)
+	if row.fewerRaces {
+		return skillAnalysisFewerRacesMark + text
+	}
+	return text
 }
 
 // skillAnalysisColumns defines the skill analysis table. A column without a key sorts by skill name.
@@ -74,30 +90,15 @@ var skillAnalysisColumns = [...]struct {
 	{"Proc%", tableColumn{alignment: text.End, sample: "100.0%"},
 		func(row *skillAnalysisRow) float64 { return row.summary.ProcRate }, false,
 		func(row *skillAnalysisRow) string { return fmt.Sprintf("%.1f%%", row.summary.ProcRate*100) }},
-	{"Win", tableColumn{alignment: text.End, sample: "+00.0%"},
+	{"Win", tableColumn{alignment: text.End, sample: "~+00.0%"},
 		func(row *skillAnalysisRow) float64 { return row.summary.WinDelta }, false,
-		func(row *skillAnalysisRow) string {
-			if !row.measured {
-				return skillAnalysisEmptyCell
-			}
-			return fmt.Sprintf("%+.1f%%", row.summary.WinDelta*100)
-		}},
-	{"Average marginal score", tableColumn{alignment: text.End, sample: "+0000.0"},
+		func(row *skillAnalysisRow) string { return row.measuredCell("%+.1f%%", row.summary.WinDelta*100) }},
+	{"Total score", tableColumn{alignment: text.End, sample: "~+0000.0"},
 		func(row *skillAnalysisRow) float64 { return row.summary.ScoreDelta }, false,
-		func(row *skillAnalysisRow) string {
-			if !row.measured {
-				return skillAnalysisEmptyCell
-			}
-			return fmt.Sprintf("%+.1f", row.summary.ScoreDelta)
-		}},
-	{"Score per SP", tableColumn{alignment: text.End, sample: "+00.00"},
+		func(row *skillAnalysisRow) string { return row.measuredCell("%+.1f", row.summary.ScoreDelta) }},
+	{"Score per SP", tableColumn{alignment: text.End, sample: "~+00.00"},
 		func(row *skillAnalysisRow) float64 { return row.scorePerPoint }, false,
-		func(row *skillAnalysisRow) string {
-			if !row.measured {
-				return skillAnalysisEmptyCell
-			}
-			return fmt.Sprintf("%+.2f", row.scorePerPoint)
-		}},
+		func(row *skillAnalysisRow) string { return row.measuredCell("%+.2f", row.scorePerPoint) }},
 }
 
 // teamRoundLoad carries the latest round of a category to the window goroutine
@@ -255,12 +256,13 @@ func (p *skillAnalysisPage) start(invalidate func()) {
 	}
 	runner := &p.round.Team[p.selectedRunner]
 	config := racesim.SkillSurveyConfig{
-		Round:      p.round,
-		Runner:     runner,
-		Courses:    p.poolCourses(p.categories.selected),
-		Conditions: p.dataStore.RaceConditions(),
-		Skills:     p.dataStore.GeneralSkills(),
-		ScoreRules: p.dataStore.ScoreRules(),
+		Round:       p.round,
+		Runner:      runner,
+		Courses:     p.poolCourses(p.categories.selected),
+		Conditions:  p.dataStore.RaceConditions(),
+		Skills:      p.dataStore.GeneralSkills(),
+		ScoreRules:  p.dataStore.ScoreRules(),
+		SkillPoints: p.dataStore.TotalSkillPoints,
 	}
 	p.analysisTitle = fmt.Sprintf("%s, %s", p.categories.selected, p.dataStore.CharaName(runner.CharaId))
 	p.table.widths = nil
@@ -300,7 +302,7 @@ func (p *skillAnalysisPage) runAnalysis(
 		config.Engine = engine
 		err = racesim.RunSkillSurvey(config, stop, func(report racesim.SkillSurveyReport) {
 			if report.Summaries != nil {
-				rows = p.newRows(report.Summaries, report.RacesPerCourse > 0)
+				rows = p.newRows(report.Summaries, report.RacesPerCourse)
 			}
 			latest = report
 			p.deliver(skillAnalysisUpdate{report: report, rows: rows}, invalidate)
@@ -321,23 +323,19 @@ func (p *skillAnalysisPage) deliver(update skillAnalysisUpdate, invalidate func(
 	invalidate()
 }
 
-// newRows returns the table rows of the skill summaries. Upgrading a skill costs what the upgrade
-// costs beyond the tier that the uma already owns.
-func (p *skillAnalysisPage) newRows(summaries []racesim.SkillSummary, measured bool) []skillAnalysisRow {
+// newRows returns the table rows of the skill summaries, given the races per course of the skills
+// that are still running.
+func (p *skillAnalysisPage) newRows(summaries []racesim.SkillSummary, racesPerCourse int) []skillAnalysisRow {
 	rows := make([]skillAnalysisRow, len(summaries))
 	for i := range summaries {
 		summary := &summaries[i]
-		ids := []int{summary.SkillId}
-		points := p.dataStore.TotalSkillPoints(ids)
-		if summary.ReplacedSkillId != 0 {
-			points -= p.dataStore.TotalSkillPoints([]int{summary.ReplacedSkillId})
-		}
 		rows[i] = skillAnalysisRow{
-			name:          p.dataStore.SkillNames(ids)[0],
-			skillPoints:   points,
-			scorePerPoint: summary.ScoreDelta / float64(points),
+			name:          p.dataStore.SkillNames([]int{summary.SkillId})[0],
+			skillPoints:   summary.SkillPoints,
+			scorePerPoint: summary.ScoreDelta / float64(summary.SkillPoints),
 			summary:       *summary,
-			measured:      measured,
+			measured:      racesPerCourse > 0,
+			fewerRaces:    summary.RacesPerCourse < racesPerCourse,
 		}
 	}
 	return rows

@@ -12,7 +12,8 @@ use uma_race_sim::data::{DataEra, GameData, corpus};
 use uma_race_sim::sim::defs::Phase;
 use uma_race_sim::sim::physics::{hp, stats};
 use uma_race_sim::sim::race::{self, DT, Race};
-use uma_race_sim::sim::{skill, tick};
+use uma_race_sim::sim::skill::{self, SkillManager};
+use uma_race_sim::sim::tick;
 
 /// Version of this interface, checked by the application when it loads the library.
 const INTERFACE_VERSION: u32 = 6;
@@ -40,6 +41,9 @@ const LAST_TARGET_TIME_BRACKET: i32 = 20;
 const RARITY_NORMAL: i32 = 1;
 const RARITY_RARE: i32 = 2;
 const RARITY_FIRST_UNIQUE: i32 = 3;
+
+/// Steps between two stops of a shared race. Closer stops skip more of each skill race and cost more to keep.
+const STOP_INTERVAL_STEPS: u32 = 64;
 
 /// Set in an activation flag when the skill activated.
 const FIRED_SKILL: u8 = 1;
@@ -436,7 +440,8 @@ pub unsafe extern "C" fn racesim_watch_skills(data: *const GameData, race: *cons
 
 /// For each skill of the trial and each variation stored by `racesim_watch_skills` in which the skill or the tier that
 /// it replaces activated, simulates the race with that skill in effect and stores what it changed against the baseline.
-/// A race in which neither activated is the baseline race, so it is not repeated and stores no change. The outcomes of
+/// A race in which neither activated is the baseline race, so it is not repeated and stores no change. Each skill race
+/// continues from a stop of the race shared by the skills of its variation, where its skill allows that. The outcomes of
 /// skill `k` occupy the elements from `k * variation_count` in variation order. Leaves one processor thread free for
 /// the window. Returns 0 on success. One caller at a time may use the race. The data is read only.
 ///
@@ -462,6 +467,21 @@ pub unsafe extern "C" fn racesim_run_skill_trial(
         let activations = unsafe { std::slice::from_raw_parts(trial.activations, skill_count * variation_count) };
         let outcomes = unsafe { std::slice::from_raw_parts_mut(outcomes, skill_count * variation_count) };
         let races: Vec<_> = variations.iter().map(|variation| varied_race(base, trial, variation)).collect();
+        let can_share: Vec<_> = skills.iter().map(|&id| skill::stays_baseline_until_first_effect(data, base, trial.runner, id)).collect();
+        let mut shared_races: Vec<_> = races.iter().map(|_| None).collect();
+        for_each_on_threads(
+            shared_races.iter_mut().enumerate(),
+            || (),
+            |_, (variation, shared)| {
+                let row = &activations[variation * skill_count..][..skill_count];
+                let (kept, tiers): (Vec<_>, Vec<_>) =
+                    (0..skill_count).filter(|&k| row[k] != 0 && can_share[k]).map(|k| (skills[k], replaced[k])).unzip();
+                if !kept.is_empty() {
+                    let (input, gate) = &races[variation];
+                    *shared = Some(SharedRace::new(input, *gate, data, [&kept, &tiers], rules));
+                }
+            },
+        )?;
         for_each_on_threads(
             outcomes.iter_mut().enumerate(),
             || races.clone(),
@@ -470,7 +490,8 @@ pub unsafe extern "C" fn racesim_run_skill_trial(
                 *outcome = SkillOutcome::default();
                 if activations[variation * skill_count + skill] != 0 {
                     let (input, gate) = &mut races[variation];
-                    *outcome = run_skill_race(input, *gate, data, [skills[skill], replaced[skill]], &baselines[variation], rules);
+                    let stop = shared_races[variation].as_ref().and_then(|shared: &SharedRace| shared.stop_before(skills[skill]));
+                    *outcome = run_skill_race(input, *gate, data, [skills[skill], replaced[skill]], stop, &baselines[variation], rules);
                 }
             },
         )?;
@@ -500,15 +521,93 @@ fn varied_race(base: &RaceInput, trial: &SkillTrial, variation: &RaceVariation) 
     (input, gate.expect("every variation holds the runner under test at a gate"))
 }
 
+/// A variation of a trial up to the first effects of its skills, from which each skill race continues.
+struct SharedRace<'a> {
+    /// In race order, none past the first random skill pick of the runner under test, because an observed skill can
+    /// take the place of a pick.
+    stops: Vec<RaceStop<'a>>,
+    /// The skills that continue from a stop, in ascending order.
+    skills: Vec<i32>,
+    /// For each skill, the race time of the first effect of the skill or of the tier that it replaces.
+    first_effects: Vec<f32>,
+}
+
+/// One point of a shared race, between two steps.
+struct RaceStop<'a> {
+    /// The race without any skill under test.
+    race: Race<'a>,
+    progress: PositioningProgress,
+    /// What the runner under test holds at this point in the race that watches the skills.
+    watchers: SkillManager,
+}
+
+impl<'a> SharedRace<'a> {
+    /// Runs the race that watches the skills, which finds their first effects and holds their state at each stop, then
+    /// the race without them up to the last stop that any skill can use. Takes the skills and their replaced tiers.
+    fn new(input: &'a RaceInput, gate: usize, data: &'a GameData, [skills, tiers]: [&[i32]; 2], rules: &ScoreRules) -> Self {
+        let mut watch_input = input.clone();
+        let horse = &mut watch_input.horses[gate];
+        horse.skills.extend(skills.iter().map(|&skill_id| SkillInput { skill_id, level: 1 }));
+        horse.muted_skills = skills.to_vec();
+        horse.observed_skills = skills.to_vec();
+        let mut watch = started_race(&watch_input, data);
+        let mut watchers = Vec::new();
+        let mut steps = 0;
+        let mut finished = false;
+        let mut picked = false;
+        while !finished {
+            picked |= !watch.horses[gate].skill_manager.reserved_skill_ids.is_empty();
+            if steps % STOP_INTERVAL_STEPS == 0 && !picked {
+                watchers.push(watch.horses[gate].skill_manager.clone());
+            }
+            finished = tick::step(&mut watch);
+            steps += 1;
+        }
+        let mut first_effects = vec![f32::INFINITY; skills.len()];
+        for span in watch.recorder.skill_spans.iter().filter(|span| span.horse == gate) {
+            for (k, first_effect) in first_effects.iter_mut().enumerate() {
+                if skills[k] == span.skill_id || tiers[k] == span.skill_id {
+                    *first_effect = first_effect.min(span.start);
+                }
+            }
+        }
+        let latest = first_effects.iter().copied().fold(0.0, f32::max);
+        let mut race = started_race(input, data);
+        let mut progress = PositioningProgress::default();
+        let mut stops = Vec::with_capacity(watchers.len());
+        let mut watchers = watchers.into_iter().peekable();
+        while let Some(held) = watchers.next() {
+            if !(race.accumulate_time_since_start < latest) {
+                break;
+            }
+            stops.push(RaceStop { race: race.clone(), progress, watchers: held });
+            if watchers.peek().is_some() {
+                for _ in 0..STOP_INTERVAL_STEPS {
+                    step_scored(&mut race, input, gate, rules, &mut progress);
+                }
+            }
+        }
+        SharedRace { stops, skills: skills.to_vec(), first_effects }
+    }
+
+    /// Returns the last stop before the first effect of a skill, if the skill continues from a stop.
+    fn stop_before(&self, skill_id: i32) -> Option<&RaceStop<'a>> {
+        let first_effect = self.first_effects[self.skills.binary_search(&skill_id).ok()?];
+        self.stops.iter().rev().find(|stop| stop.race.accumulate_time_since_start < first_effect)
+    }
+}
+
 /// Adds a skill to the runner at `gate` in effect, simulates the race, removes the skill again and returns what it
 /// changed. The ids are the skill and the tier that it replaces, or 0. The skill draws from its own generator, so the
-/// race is the baseline race up to its first effect and the difference measures that skill alone. An upgrade mutes the
-/// tier that it replaces, because the game holds only one tier of a skill.
+/// race is the baseline race up to its first effect and the difference measures that skill alone, which also lets the
+/// race continue from a stop before that effect. An upgrade mutes the tier that it replaces, because the game holds only
+/// one tier of a skill.
 fn run_skill_race(
     input: &mut RaceInput,
     gate: usize,
     data: &GameData,
     [skill_id, replaced_id]: [i32; 2],
+    stop: Option<&RaceStop>,
     baseline: &BaselineOutcome,
     rules: &ScoreRules,
 ) -> SkillOutcome {
@@ -516,7 +615,16 @@ fn run_skill_race(
     horse.skills.push(SkillInput { skill_id, level: 1 });
     horse.observed_skills.push(skill_id);
     horse.muted_skills.push(replaced_id);
-    let (race, positioning_score) = simulate_to_finish(input, data, gate, rules);
+    let (race, positioning_score) = match stop {
+        Some(stop) => {
+            let mut race = stop.race.clone();
+            race.input = input;
+            let watched = skill::find_skill(&stop.watchers, skill_id).expect("a stop holds the skills that continue from it");
+            race.horses[gate].skill_manager.adopt_observed_skill(&stop.watchers, watched);
+            finish_race(race, input, gate, rules, stop.progress)
+        }
+        None => finish_race(started_race(input, data), input, gate, rules, PositioningProgress::default()),
+    };
     let (score, finish_order) = (positioning_score + race_score(&race, input, gate, rules), race.recorder.results[gate].finish_order);
     drop(race);
     let horse = &mut input.horses[gate];
@@ -529,28 +637,52 @@ fn run_skill_race(
     }
 }
 
+/// What the score of the runner under test has gathered so far for being ahead going into each phase.
+#[derive(Clone, Copy, Default)]
+struct PositioningProgress {
+    phases_entered: usize,
+    score: i32,
+}
+
+/// Returns a race between its start and its first step, recording no frames, which a score does not read.
+fn started_race<'a>(input: &'a RaceInput, data: &'a GameData) -> Race<'a> {
+    let mut race = race::init(input, data);
+    race.record_frames = false;
+    tick::start(&mut race);
+    race
+}
+
+/// Runs one step and adds up the positioning score of the runner at `gate`. Returns whether every runner has finished.
+fn step_scored(race: &mut Race, input: &RaceInput, gate: usize, rules: &ScoreRules, progress: &mut PositioningProgress) -> bool {
+    // The game judges a phase change by the distances before the step
+    let ahead = is_ahead_of_same_style(race, input, gate);
+    let finished = tick::step(race);
+    while progress.phases_entered < rules.positioning.len() && race.horses[gate].phase as usize > progress.phases_entered {
+        if ahead {
+            progress.score += rules.positioning[progress.phases_entered];
+        }
+        progress.phases_entered += 1;
+    }
+    finished
+}
+
+/// Runs a race to its finish and returns it with the score of the runner at `gate` for being ahead going into each phase.
+fn finish_race<'a>(
+    mut race: Race<'a>,
+    input: &RaceInput,
+    gate: usize,
+    rules: &ScoreRules,
+    mut progress: PositioningProgress,
+) -> (Race<'a>, i32) {
+    while !step_scored(&mut race, input, gate, rules, &mut progress) {}
+    tick::finish(&mut race);
+    (race, progress.score)
+}
+
 /// Simulates one race and returns the finished race with the score of the runner at `gate` for being ahead going into
 /// each phase.
 fn simulate_to_finish<'a>(input: &'a RaceInput, data: &'a GameData, gate: usize, rules: &ScoreRules) -> (Race<'a>, i32) {
-    let mut race = race::init(input, data);
-    tick::start(&mut race);
-    let (mut phases_entered, mut positioning_score) = (0, 0);
-    loop {
-        // The game judges a phase change by the distances before the step
-        let ahead = is_ahead_of_same_style(&race, input, gate);
-        let finished = tick::step(&mut race);
-        while phases_entered < rules.positioning.len() && race.horses[gate].phase as usize > phases_entered {
-            if ahead {
-                positioning_score += rules.positioning[phases_entered];
-            }
-            phases_entered += 1;
-        }
-        if finished {
-            break;
-        }
-    }
-    tick::finish(&mut race);
-    (race, positioning_score)
+    finish_race(started_race(input, data), input, gate, rules, PositioningProgress::default())
 }
 
 /// Returns whether the runner at `gate` is ahead of all other runners of its running style.

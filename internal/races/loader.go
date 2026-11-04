@@ -11,6 +11,15 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// TeamTrialResultsDirectory returns the folder in which team trial result files are saved
+func TeamTrialResultsDirectory() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("get home dir: %w", err)
+	}
+	return filepath.Join(home, "Documents", "Saved races", "Team trials"), nil
+}
+
 // LoadRacesFolder reads every team trial result file in the directory tree concurrently and
 // returns the valid results in directory order
 func LoadRacesFolder(directoryPath string) (TeamTrialResultSet, error) {

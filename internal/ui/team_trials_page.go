@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"image"
 	"image/color"
-	"os"
-	"path/filepath"
 	"slices"
 
 	"gioui.org/f32"
@@ -105,11 +103,10 @@ type chosenVet struct {
 // loadTeamTrialResults loads the team trial result files from the game's save directory and
 // returns the directory with the results
 func loadTeamTrialResults() (dir string, resultSet races.TeamTrialResultSet, err error) {
-	home, err := os.UserHomeDir()
+	dir, err = races.TeamTrialResultsDirectory()
 	if err != nil {
-		return "", resultSet, fmt.Errorf("get home dir: %w", err)
+		return "", resultSet, err
 	}
-	dir = filepath.Join(home, "Documents", "Saved races", "Team trials")
 	resultSet, err = races.LoadRacesFolder(dir)
 	return dir, resultSet, err
 }
