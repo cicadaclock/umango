@@ -30,16 +30,19 @@ const (
 	missingEngineText       = "The race engine files are missing, as the Simulator tab lists"
 	findingSkillsText       = "Finding skills that can activate…"
 	skillAnalysisCaption    = "Proc%: share of races in which the skill activated. Win: change of the win rate. " +
-		"Score per SP: change of the team trial score before bonuses, for each skill point."
+		"Average marginal score: points per race before bonuses, including races without an activation. " +
+		"Score per SP: that average per skill point."
 	skillAnalysisEmptyCell = "-"
 	skillAnalysisRowHeight = unit.Dp(26)
 	// Space between the groups of controls in the toolbar
 	skillAnalysisGroupGap = unit.Dp(14)
 	skillAnalysisCaptionY = unit.Dp(6)
+	// A narrow window wraps the caption
+	skillAnalysisCaptionLines = 2
 	// Runners on one team
 	teamRunnerCount = 3
 	// Column of the score per skill point, by which the table first sorts
-	scorePerPointColumn = 4
+	scorePerPointColumn = 5
 )
 
 // skillAnalysisRow holds the values of one skill in the skill analysis table
@@ -78,6 +81,14 @@ var skillAnalysisColumns = [...]struct {
 				return skillAnalysisEmptyCell
 			}
 			return fmt.Sprintf("%+.1f%%", row.summary.WinDelta*100)
+		}},
+	{"Average marginal score", tableColumn{alignment: text.End, sample: "+0000.0"},
+		func(row *skillAnalysisRow) float64 { return row.summary.ScoreDelta }, false,
+		func(row *skillAnalysisRow) string {
+			if !row.measured {
+				return skillAnalysisEmptyCell
+			}
+			return fmt.Sprintf("%+.1f", row.summary.ScoreDelta)
 		}},
 	{"Score per SP", tableColumn{alignment: text.End, sample: "+00.00"},
 		func(row *skillAnalysisRow) float64 { return row.scorePerPoint }, false,
@@ -500,7 +511,9 @@ func (p *skillAnalysisPage) layoutResult(gtx layout.Context, theme *material.The
 	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			inset := layout.Inset{Top: skillAnalysisCaptionY, Bottom: skillAnalysisCaptionY, Left: tableCellPadding}
-			return inset.Layout(gtx, textLabel(theme, smallTextSize, skillAnalysisCaption, colorTextMuted).Layout)
+			caption := textLabel(theme, smallTextSize, skillAnalysisCaption, colorTextMuted)
+			caption.MaxLines, caption.WrapPolicy = skillAnalysisCaptionLines, text.WrapWords
+			return inset.Layout(gtx, caption.Layout)
 		}),
 		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 			return p.table.layout(gtx, theme)

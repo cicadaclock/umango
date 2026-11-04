@@ -178,7 +178,8 @@ type SkillSummary struct {
 	ProcRate float64
 	// Mean change of the win rate
 	WinDelta float64
-	// Mean change of the team trial score before bonuses
+	// Mean change of the team trial score before bonuses, over all races of the pool. A race in which
+	// the skill did not activate counts as no change.
 	ScoreDelta float64
 }
 
