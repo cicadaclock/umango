@@ -18,7 +18,7 @@ This uses the fork in `../uma-race-simulator`, cloning it there if needed, then 
 
 The Skill Analysis tab tests which skills suit one uma of a team on the team trial courses of a category. Pick a category and an uma from your latest saved team trial. The field of that round then runs on every course of the category's pool, with season, weather and ground drawn at the game's rates and the gates shuffled in each race.
 
-Each skill that the uma could still learn and that can activate on some course of the pool is added to her skills, one at a time, and raced against the same races with that skill muted. The table refreshes every 10 races per course, up to 100, and you can stop at any time. A full run takes several minutes.
+Each skill that the uma could still learn and that can activate on some course of the pool first watches 100 races per course alongside all the others, without affecting them. Those races are the baseline and give every proc rate within seconds. A skill then races for real, one at a time, on only the races where it activated, because a race where it did not activate would not change. The table refreshes every 10 races per course, up to 100, and you can stop at any time. A full run takes a few minutes.
 
 The table shows how often each skill activates, how much it changes the win rate, and how much team trial score it adds for each skill point. The score is what the uma earns in the race before the ace, opponent rating, streak and support bonuses. The skill point cost is before any hint discount, and an upgrade costs only what it adds beyond the tier that the uma owns.
 

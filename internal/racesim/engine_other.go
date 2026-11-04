@@ -37,7 +37,12 @@ func (*Engine) PossibleSkills(PreparedRace, *SkillTrial, []uint8) error {
 	return errUnsupported
 }
 
+// WatchSkills reports that this platform cannot load the engine library
+func (*Engine) WatchSkills(PreparedRace, *SkillTrial) error {
+	return errUnsupported
+}
+
 // RunSkillTrial reports that this platform cannot load the engine library
-func (*Engine) RunSkillTrial(PreparedRace, *SkillTrial, []BaselineOutcome, []SkillPairOutcome) error {
+func (*Engine) RunSkillTrial(PreparedRace, *SkillTrial, []SkillOutcome) error {
 	return errUnsupported
 }

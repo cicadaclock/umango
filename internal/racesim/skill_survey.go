@@ -4,6 +4,7 @@ import (
 	"math/rand/v2"
 	"slices"
 	"sync/atomic"
+	"time"
 
 	"github.com/cicadaclock/umango/internal/db"
 )
@@ -13,6 +14,8 @@ const (
 	SkillSurveyBatchRaces = 10
 	// Batches of a complete skill survey
 	SkillSurveyBatches = 10
+	// Races per course of a complete skill survey
+	SkillSurveyRaces = SkillSurveyBatches * SkillSurveyBatchRaces
 	// Lone Wolf, which skill surveys leave out
 	excludedSkillId = 201641
 )
@@ -115,12 +118,21 @@ type SkillTrial struct {
 	// Index in the saved race of the runner under test
 	Runner                      int
 	CourseSetId, RaceInstanceId int32
-	SkillIds                    []int32
+	// In ascending order
+	SkillIds []int32
 	// For each skill, the lower tier that the runner owns and the skill would replace, otherwise 0
 	ReplacedSkillIds []int32
 	Variations       []RaceVariation
 	Rules            *ScoreRules
+	// One per variation, stored by Engine.WatchSkills
+	Baselines []BaselineOutcome
+	// len(SkillIds) activation flags per variation, stored by Engine.WatchSkills. A flag has bit 0 set
+	// when the skill activated and bit 1 when the lower tier that it would replace activated.
+	Activations []uint8
 }
+
+// activationFiredSkill is the bit of an activation flag that is set when the skill activated
+const activationFiredSkill = 1
 
 // BaselineOutcome is what the runner under test did in one race with no added skill. The engine
 // library writes this layout, so the fields stay in the order of its BaselineOutcome.
@@ -131,12 +143,9 @@ type BaselineOutcome struct {
 	FinishOrder int32
 }
 
-// SkillPairOutcome is what one added skill changed in one race, against the same race with that
-// skill muted. The engine library writes this layout, so the fields stay in the order of its
-// SkillPairOutcome.
-type SkillPairOutcome struct {
-	// 1 when the skill activated, otherwise 0
-	Activated int32
+// SkillOutcome is what one added skill changed in one race, against the baseline of that race. The
+// engine library writes this layout, so the fields stay in the order of its SkillOutcome.
+type SkillOutcome struct {
 	// 1 when the skill won the race, -1 when it lost a won race, otherwise 0
 	WinDelta int32
 	// Change of the team trial score before bonuses
@@ -185,11 +194,14 @@ type SkillSurveyBaseline struct {
 type SkillSurveyReport struct {
 	// Skills that a runner could learn and those that can activate on some course of the pool
 	CandidateSkills, PossibleSkills int
-	// Course runs finished and in the complete survey
+	// Course runs finished and in the complete survey, not counting the watching races
 	CourseRuns, TotalCourseRuns int
-	// Races per course behind Summaries and Baseline
+	// Estimated seconds until the survey completes, 0 before the first course run finishes
+	SecondsLeft float64
+	// Races per course behind the win and score changes. The proc rates and the baseline come from the
+	// watching races, so they are complete at 0.
 	RacesPerCourse int
-	// The result so far, which only the report at the end of a batch holds
+	// The result so far, which only the reports after the watching races and after each batch hold
 	Summaries []SkillSummary
 	Baseline  SkillSurveyBaseline
 }
@@ -201,14 +213,13 @@ type surveyTally struct {
 	possible bool
 }
 
-// courseTrial is the repeated run of the library on one course
+// courseTrial is the skills and races of one course
 type courseTrial struct {
 	trial SkillTrial
 	// Index in the survey of each skill of the trial
 	skillIndexes []int32
-	generator    *rand.Rand
-	baselines    []BaselineOutcome
-	outcomes     []SkillPairOutcome
+	// Outcomes of one batch
+	outcomes []SkillOutcome
 }
 
 // skillSurvey adds up the outcomes of every skill over a pool of courses
@@ -216,16 +227,18 @@ type skillSurvey struct {
 	skillIds, replacedIds []int32
 	tallies               []surveyTally
 	courseCount           int
-	// Races per course added
+	// Races per course whose win and score changes are added
 	racesPerCourse int
 	// Over all courses
 	baselineScore, baselineWins int64
 }
 
-// RunSkillSurvey simulates each skill that the runner could learn, one at a time, in batches of
-// races on every course of the pool. It reports after each course and each batch, and returns when
-// the survey completes or soon after stop is set. The seeds follow from the round's seed, so a
-// repeated survey gives the same result.
+// RunSkillSurvey simulates each skill that the runner could learn on every course of the pool. A
+// first pass of watching races gives the baselines and every proc rate. Batches of races then
+// measure what each skill changes, on only the races where it activated. It reports after the first
+// pass, after each course run and after each batch, and returns when the survey completes or soon
+// after stop is set. The seeds follow from the round's seed, so a repeated survey gives the same
+// result.
 func RunSkillSurvey(config *SkillSurveyConfig, stop *atomic.Bool, report func(SkillSurveyReport)) error {
 	race, err := config.Engine.Prepare(config.Round.SavedRace)
 	if err != nil {
@@ -249,6 +262,10 @@ func RunSkillSurvey(config *SkillSurveyConfig, stop *atomic.Bool, report func(Sk
 	allConditions := conditionVariations(config.Conditions, config.Round.RunnerCount)
 	flags := make([]uint8, len(skillIds))
 	seedSource := uint64(config.Round.Seed)
+	totalRate := int64(0)
+	for i := range config.Conditions {
+		totalRate += int64(config.Conditions[i].Rate)
+	}
 	for c := range trials {
 		if stop.Load() {
 			return nil
@@ -266,33 +283,39 @@ func RunSkillSurvey(config *SkillSurveyConfig, stop *atomic.Bool, report func(Sk
 		if err := config.Engine.PossibleSkills(race, &whole, flags); err != nil {
 			return err
 		}
-		trials[c] = survey.newCourseTrial(&whole, flags, rand.New(rand.NewPCG(seedSource, uint64(c))))
+		trials[c] = survey.newCourseTrial(&whole, flags)
+		drawVariations(trials[c].trial.Variations, config, totalRate, rand.New(rand.NewPCG(seedSource, uint64(c))))
+		if err := config.Engine.WatchSkills(race, &trials[c].trial); err != nil {
+			return err
+		}
+		survey.addWatchingRaces(&trials[c])
 	}
 	state.PossibleSkills = survey.possibleSkillCount()
+	state.Summaries = survey.summaries()
+	state.Baseline = survey.baseline()
 	report(state)
+	state.Summaries = nil
 
-	totalRate := int64(0)
-	for i := range config.Conditions {
-		totalRate += int64(config.Conditions[i].Rate)
-	}
-	for range SkillSurveyBatches {
+	began := time.Now()
+	for batch := range SkillSurveyBatches {
 		for c := range trials {
 			if stop.Load() {
 				return nil
 			}
 			t := &trials[c]
-			t.drawVariations(config.Conditions, totalRate, config.Round.RunnerCount)
-			if err := config.Engine.RunSkillTrial(race, &t.trial, t.baselines, t.outcomes); err != nil {
+			view := t.batchView(batch)
+			if err := config.Engine.RunSkillTrial(race, &view, t.outcomes); err != nil {
 				return err
 			}
-			survey.add(t)
+			survey.addOutcomes(t)
 			state.CourseRuns++
+			runsLeft := state.TotalCourseRuns - state.CourseRuns
+			state.SecondsLeft = time.Since(began).Seconds() * float64(runsLeft) / float64(state.CourseRuns)
 			report(state)
 		}
 		survey.racesPerCourse += SkillSurveyBatchRaces
 		state.RacesPerCourse = survey.racesPerCourse
 		state.Summaries = survey.summaries()
-		state.Baseline = survey.baseline()
 		report(state)
 		state.Summaries = nil
 	}
@@ -339,7 +362,7 @@ func conditionVariations(conditions []db.RaceCondition, runnerCount int) []RaceV
 
 // newCourseTrial records which skills can activate on a course and returns the trial of those
 // skills
-func (s *skillSurvey) newCourseTrial(whole *SkillTrial, flags []uint8, generator *rand.Rand) courseTrial {
+func (s *skillSurvey) newCourseTrial(whole *SkillTrial, flags []uint8) courseTrial {
 	count := 0
 	for _, flag := range flags {
 		count += int(flag)
@@ -351,13 +374,13 @@ func (s *skillSurvey) newCourseTrial(whole *SkillTrial, flags []uint8, generator
 			RaceInstanceId:   whole.RaceInstanceId,
 			SkillIds:         make([]int32, 0, count),
 			ReplacedSkillIds: make([]int32, 0, count),
-			Variations:       make([]RaceVariation, SkillSurveyBatchRaces),
+			Variations:       make([]RaceVariation, SkillSurveyRaces),
 			Rules:            whole.Rules,
+			Baselines:        make([]BaselineOutcome, SkillSurveyRaces),
+			Activations:      make([]uint8, count*SkillSurveyRaces),
 		},
 		skillIndexes: make([]int32, 0, count),
-		generator:    generator,
-		baselines:    make([]BaselineOutcome, SkillSurveyBatchRaces),
-		outcomes:     make([]SkillPairOutcome, count*SkillSurveyBatchRaces),
+		outcomes:     make([]SkillOutcome, count*SkillSurveyBatchRaces),
 	}
 	for k, flag := range flags {
 		if flag == 0 {
@@ -371,13 +394,14 @@ func (s *skillSurvey) newCourseTrial(whole *SkillTrial, flags []uint8, generator
 	return t
 }
 
-// drawVariations draws the seed, conditions and gates of the next batch of races. The game draws
-// season, weather and ground together by the rates of race_condition, and gates at random.
-func (t *courseTrial) drawVariations(conditions []db.RaceCondition, totalRate int64, runnerCount int) {
-	for i := range t.trial.Variations {
-		v := &t.trial.Variations[i]
-		v.Seed = t.generator.Int32()
-		draw := t.generator.Int64N(totalRate)
+// drawVariations draws the seed, conditions and gates of each race. The game draws season, weather
+// and ground together by the rates of race_condition, and gates at random.
+func drawVariations(variations []RaceVariation, config *SkillSurveyConfig, totalRate int64, generator *rand.Rand) {
+	conditions, runnerCount := config.Conditions, config.Round.RunnerCount
+	for i := range variations {
+		v := &variations[i]
+		v.Seed = generator.Int32()
+		draw := generator.Int64N(totalRate)
 		k := 0
 		for draw >= int64(conditions[k].Rate) {
 			draw -= int64(conditions[k].Rate)
@@ -389,25 +413,42 @@ func (t *courseTrial) drawVariations(conditions []db.RaceCondition, totalRate in
 		for gate := range runnerCount {
 			v.GateOrder[gate] = uint8(gate)
 		}
-		t.generator.Shuffle(runnerCount, func(a, b int) {
+		generator.Shuffle(runnerCount, func(a, b int) {
 			v.GateOrder[a], v.GateOrder[b] = v.GateOrder[b], v.GateOrder[a]
 		})
 	}
 }
 
-// add adds the outcomes of one run of a course
-func (s *skillSurvey) add(t *courseTrial) {
-	for i := range t.baselines {
-		s.baselineScore += int64(t.baselines[i].Score)
-		if t.baselines[i].FinishOrder == 0 {
+// batchView returns the trial narrowed to the races of one batch
+func (t *courseTrial) batchView(batch int) SkillTrial {
+	view := t.trial
+	first, last := batch*SkillSurveyBatchRaces, (batch+1)*SkillSurveyBatchRaces
+	count := len(t.trial.SkillIds)
+	view.Variations = t.trial.Variations[first:last]
+	view.Baselines = t.trial.Baselines[first:last]
+	view.Activations = t.trial.Activations[first*count : last*count]
+	return view
+}
+
+// addWatchingRaces adds the baselines and the activations of the watching races of one course
+func (s *skillSurvey) addWatchingRaces(t *courseTrial) {
+	for i := range t.trial.Baselines {
+		s.baselineScore += int64(t.trial.Baselines[i].Score)
+		if t.trial.Baselines[i].FinishOrder == 0 {
 			s.baselineWins++
 		}
 	}
-	races := len(t.trial.Variations)
+	count := len(t.skillIndexes)
+	for i, flag := range t.trial.Activations {
+		s.tallies[t.skillIndexes[i%count]].activated += int64(flag & activationFiredSkill)
+	}
+}
+
+// addOutcomes adds the outcomes of one batch of one course
+func (s *skillSurvey) addOutcomes(t *courseTrial) {
 	for i, k := range t.skillIndexes {
 		tally := &s.tallies[k]
-		for _, o := range t.outcomes[i*races : (i+1)*races] {
-			tally.activated += int64(o.Activated)
+		for _, o := range t.outcomes[i*SkillSurveyBatchRaces : (i+1)*SkillSurveyBatchRaces] {
 			tally.winDelta += int64(o.WinDelta)
 			tally.scoreDelta += int64(o.ScoreDelta)
 		}
@@ -427,15 +468,17 @@ func (s *skillSurvey) possibleSkillCount() int {
 
 // baseline returns the runner's results with no added skill
 func (s *skillSurvey) baseline() SkillSurveyBaseline {
-	races := float64(s.racesPerCourse * s.courseCount)
+	races := float64(SkillSurveyRaces * s.courseCount)
 	return SkillSurveyBaseline{Score: float64(s.baselineScore) / races, WinRate: float64(s.baselineWins) / races}
 }
 
 // summaries returns the result of each skill that can activate on some course. A course where a
-// skill cannot activate counts as races without an activation or a change.
+// skill cannot activate counts as races without an activation or a change. The changes are 0 before
+// the first batch finishes.
 func (s *skillSurvey) summaries() []SkillSummary {
 	summaries := make([]SkillSummary, 0, len(s.tallies))
-	races := float64(s.racesPerCourse * s.courseCount)
+	watched := float64(SkillSurveyRaces * s.courseCount)
+	measured := float64(max(s.racesPerCourse, 1) * s.courseCount)
 	for i := range s.tallies {
 		tally := &s.tallies[i]
 		if !tally.possible {
@@ -444,9 +487,9 @@ func (s *skillSurvey) summaries() []SkillSummary {
 		summaries = append(summaries, SkillSummary{
 			SkillId:         int(s.skillIds[i]),
 			ReplacedSkillId: int(s.replacedIds[i]),
-			ProcRate:        float64(tally.activated) / races,
-			WinDelta:        float64(tally.winDelta) / races,
-			ScoreDelta:      float64(tally.scoreDelta) / races,
+			ProcRate:        float64(tally.activated) / watched,
+			WinDelta:        float64(tally.winDelta) / measured,
+			ScoreDelta:      float64(tally.scoreDelta) / measured,
 		})
 	}
 	return summaries

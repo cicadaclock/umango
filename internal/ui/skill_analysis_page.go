@@ -7,7 +7,6 @@ import (
 	"slices"
 	"strconv"
 	"sync/atomic"
-	"time"
 
 	"gioui.org/layout"
 	"gioui.org/text"
@@ -27,11 +26,12 @@ const (
 	selectCategoryText      = "Select a category, then an uma on that team"
 	selectUmaText           = "Select an uma on the team"
 	readyToStartText        = "Start the analysis to simulate each skill on every course of the pool"
-	firstResultText         = "The first results appear when each course has run %d races"
+	watchingRacesText       = "Watching %d races per course for skill activations…"
 	missingEngineText       = "The race engine files are missing, as the Simulator tab lists"
 	findingSkillsText       = "Finding skills that can activate…"
 	skillAnalysisCaption    = "Proc%: share of races in which the skill activated. Win: change of the win rate. " +
 		"Score per SP: change of the team trial score before bonuses, for each skill point."
+	skillAnalysisEmptyCell = "-"
 	skillAnalysisRowHeight = unit.Dp(26)
 	// Space between the groups of controls in the toolbar
 	skillAnalysisGroupGap = unit.Dp(14)
@@ -50,6 +50,8 @@ type skillAnalysisRow struct {
 	// Change of the team trial score before bonuses for each skill point
 	scorePerPoint float64
 	summary       racesim.SkillSummary
+	// Whether the win and score changes hold races yet
+	measured bool
 }
 
 // skillAnalysisColumns defines the skill analysis table. A column without a key sorts by skill name.
@@ -71,10 +73,20 @@ var skillAnalysisColumns = [...]struct {
 		func(row *skillAnalysisRow) string { return fmt.Sprintf("%.1f%%", row.summary.ProcRate*100) }},
 	{"Win", tableColumn{alignment: text.End, sample: "+00.0%"},
 		func(row *skillAnalysisRow) float64 { return row.summary.WinDelta }, false,
-		func(row *skillAnalysisRow) string { return fmt.Sprintf("%+.1f%%", row.summary.WinDelta*100) }},
+		func(row *skillAnalysisRow) string {
+			if !row.measured {
+				return skillAnalysisEmptyCell
+			}
+			return fmt.Sprintf("%+.1f%%", row.summary.WinDelta*100)
+		}},
 	{"Score per SP", tableColumn{alignment: text.End, sample: "+00.00"},
 		func(row *skillAnalysisRow) float64 { return row.scorePerPoint }, false,
-		func(row *skillAnalysisRow) string { return fmt.Sprintf("%+.2f", row.scorePerPoint) }},
+		func(row *skillAnalysisRow) string {
+			if !row.measured {
+				return skillAnalysisEmptyCell
+			}
+			return fmt.Sprintf("%+.2f", row.scorePerPoint)
+		}},
 }
 
 // teamRoundLoad carries the latest round of a category to the window goroutine
@@ -116,10 +128,9 @@ type skillAnalysisPage struct {
 	errorText      string
 	// Category and uma of the analysis that the table shows
 	analysisTitle string
-	// Races per course behind the rows
+	// Races per course behind the win and score changes of the rows, negative before the first rows
 	racesShown int
 	running    bool
-	startTime  time.Time
 	stop       *atomic.Bool
 	roundLoads chan teamRoundLoad
 	updates    chan skillAnalysisUpdate
@@ -139,6 +150,7 @@ func newSkillAnalysisPage(dataStore *data.DataStore, engines *engineHolder, resu
 		resultsDir:     resultsDir,
 		panel:          panel{title: skillAnalysisPanelTitle},
 		selectedRunner: -1,
+		racesShown:     -1,
 		table:          newTableView(headers, styles, skillAnalysisRowHeight, false),
 		roundLoads:     make(chan teamRoundLoad, 1),
 		updates:        make(chan skillAnalysisUpdate, 1),
@@ -243,9 +255,9 @@ func (p *skillAnalysisPage) start(invalidate func()) {
 	p.table.widths = nil
 	p.table.setColumns(nil)
 	p.table.scrollToTop()
-	p.rows, p.racesShown, p.errorText = nil, 0, ""
+	p.rows, p.racesShown, p.errorText = nil, -1, ""
 	p.report = racesim.SkillSurveyReport{}
-	p.running, p.startTime = true, time.Now()
+	p.running = true
 	p.stop = &atomic.Bool{}
 	go p.runAnalysis(&config, files, p.stop, invalidate)
 }
@@ -277,7 +289,7 @@ func (p *skillAnalysisPage) runAnalysis(
 		config.Engine = engine
 		err = racesim.RunSkillSurvey(config, stop, func(report racesim.SkillSurveyReport) {
 			if report.Summaries != nil {
-				rows = p.newRows(report.Summaries)
+				rows = p.newRows(report.Summaries, report.RacesPerCourse > 0)
 			}
 			latest = report
 			p.deliver(skillAnalysisUpdate{report: report, rows: rows}, invalidate)
@@ -300,7 +312,7 @@ func (p *skillAnalysisPage) deliver(update skillAnalysisUpdate, invalidate func(
 
 // newRows returns the table rows of the skill summaries. Upgrading a skill costs what the upgrade
 // costs beyond the tier that the uma already owns.
-func (p *skillAnalysisPage) newRows(summaries []racesim.SkillSummary) []skillAnalysisRow {
+func (p *skillAnalysisPage) newRows(summaries []racesim.SkillSummary, measured bool) []skillAnalysisRow {
 	rows := make([]skillAnalysisRow, len(summaries))
 	for i := range summaries {
 		summary := &summaries[i]
@@ -314,6 +326,7 @@ func (p *skillAnalysisPage) newRows(summaries []racesim.SkillSummary) []skillAna
 			skillPoints:   points,
 			scorePerPoint: summary.ScoreDelta / float64(points),
 			summary:       *summary,
+			measured:      measured,
 		}
 	}
 	return rows
@@ -322,7 +335,7 @@ func (p *skillAnalysisPage) newRows(summaries []racesim.SkillSummary) []skillAna
 // applyUpdate shows the state of the running analysis
 func (p *skillAnalysisPage) applyUpdate(update skillAnalysisUpdate) {
 	p.report = update.report
-	if update.report.RacesPerCourse != p.racesShown {
+	if update.rows != nil && update.report.RacesPerCourse != p.racesShown {
 		p.racesShown = update.report.RacesPerCourse
 		p.baseline = update.report.Baseline
 		p.rows = update.rows
@@ -364,7 +377,7 @@ func (p *skillAnalysisPage) refreshCells() {
 		} else {
 			order = sign * cmp.Compare(a.name, b.name)
 		}
-		return cmp.Or(order, cmp.Compare(a.name, b.name))
+		return cmp.Or(order, cmp.Compare(b.summary.ProcRate, a.summary.ProcRate), cmp.Compare(a.name, b.name))
 	})
 	columns := make([][]string, len(skillAnalysisColumns))
 	for col := range skillAnalysisColumns {
@@ -379,12 +392,11 @@ func (p *skillAnalysisPage) refreshCells() {
 
 // detailText states what the table shows and the baseline of the uma
 func (p *skillAnalysisPage) detailText() string {
-	if p.racesShown == 0 {
+	if p.racesShown < 0 {
 		return ""
 	}
-	return fmt.Sprintf("%s: %d of %d races per course, baseline score %.0f, win rate %.1f%%",
-		p.analysisTitle, p.racesShown, racesim.SkillSurveyBatches*racesim.SkillSurveyBatchRaces,
-		p.baseline.Score, p.baseline.WinRate*100)
+	return fmt.Sprintf("%s: score measured on %d of %d races per course, baseline score %.0f, win rate %.1f%%",
+		p.analysisTitle, p.racesShown, racesim.SkillSurveyRaces, p.baseline.Score, p.baseline.WinRate*100)
 }
 
 // statusText states the progress of the running analysis, or the last failure
@@ -398,8 +410,7 @@ func (p *skillAnalysisPage) statusText() string {
 	}
 	status := fmt.Sprintf("%d of %d skills can activate", r.PossibleSkills, r.CandidateSkills)
 	if r.CourseRuns > 0 {
-		left := time.Duration(float64(time.Since(p.startTime)) * float64(r.TotalCourseRuns-r.CourseRuns) / float64(r.CourseRuns))
-		status += fmt.Sprintf(", %.0f min left", max(left.Minutes(), 1))
+		status += fmt.Sprintf(", %.0f min left", max(r.SecondsLeft/60, 1))
 	}
 	return status
 }
@@ -426,7 +437,7 @@ func (p *skillAnalysisPage) layout(gtx layout.Context, theme *material.Theme, in
 func (p *skillAnalysisPage) instruction() string {
 	switch {
 	case p.running:
-		return fmt.Sprintf(firstResultText, racesim.SkillSurveyBatchRaces)
+		return fmt.Sprintf(watchingRacesText, racesim.SkillSurveyRaces)
 	case p.round == nil:
 		return selectCategoryText
 	case p.selectedRunner < 0:
