@@ -58,14 +58,16 @@ const (
 	tabTeamTrials = iota
 	tabVeteranList
 	tabSimulator
+	tabSkillAnalysis
 	tabCount
 )
 
 var (
 	tabTitles = [tabCount]string{
-		tabTeamTrials:  "TT Chart",
-		tabVeteranList: "Veteran List",
-		tabSimulator:   "Simulator",
+		tabTeamTrials:    "TT Chart",
+		tabVeteranList:   "Veteran List",
+		tabSimulator:     "Simulator",
+		tabSkillAnalysis: "Skill Analysis",
 	}
 
 	// Weight instances of the Inter variable font that the full shaper adds
@@ -170,15 +172,16 @@ func load(fontData []byte) loadResult {
 
 // screen holds the window state between frames
 type screen struct {
-	theme      *material.Theme
-	window     *app.Window
-	explorer   *explorer.Explorer
-	loadError  string
-	tabs       [tabCount]widget.Clickable
-	activeTab  int
-	teamTrials *teamTrialsPage
-	veterans   *veteranPage
-	simulator  *simulatorPage
+	theme         *material.Theme
+	window        *app.Window
+	explorer      *explorer.Explorer
+	loadError     string
+	tabs          [tabCount]widget.Clickable
+	activeTab     int
+	teamTrials    *teamTrialsPage
+	veterans      *veteranPage
+	simulator     *simulatorPage
+	skillAnalysis *skillAnalysisPage
 	// TT page data reloaded by the results watcher, holding at most one pending reload
 	reloads chan teamTrialsData
 }
@@ -237,7 +240,9 @@ func (s *screen) applyLoad(result loadResult) {
 	s.theme.Shaper = result.shaper
 	s.teamTrials = result.teamTrials
 	s.veterans = newVeteranPage(result.dataStore)
-	s.simulator = newSimulatorPage(result.dataStore)
+	engines := &engineHolder{}
+	s.simulator = newSimulatorPage(result.dataStore, engines)
+	s.skillAnalysis = newSkillAnalysisPage(result.dataStore, engines, result.resultsDir)
 	go watchTeamTrialResults(result.resultsDir, result.dataStore, s.deliverReload)
 }
 
@@ -275,6 +280,8 @@ func (s *screen) layout(gtx layout.Context) layout.Dimensions {
 					return s.veterans.layout(gtx, s.theme, s.explorer, s.window.Invalidate)
 				case tabSimulator:
 					return s.simulator.layout(gtx, s.theme, s.explorer, s.window.Invalidate)
+				case tabSkillAnalysis:
+					return s.skillAnalysis.layout(gtx, s.theme, s.window.Invalidate)
 				}
 				return s.teamTrials.layout(gtx, s.theme)
 			})

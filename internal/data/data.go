@@ -43,6 +43,15 @@ type DataStore struct {
 	charaNames map[int]string
 	// Race track ID to race track name
 	raceTrackNames map[int]string
+
+	// Races from which team trials draw
+	teamTrialPool []db.TeamTrialRace
+	// Combinations of season, weather and ground condition that races draw
+	raceConditions []db.RaceCondition
+	// Skills that any uma can learn with skill points
+	generalSkills []db.GeneralSkill
+	// Base scores of a team trial race and the conditions that earn them
+	scoreRules []db.ScoreRule
 }
 
 // Init opens master.mdb and loads every lookup table into memory concurrently
@@ -70,6 +79,10 @@ func Init() (*DataStore, error) {
 	g.Go(func() (err error) { dataStore.courseDistances, err = db.RaceInstanceDistances(); return })
 	g.Go(func() (err error) { dataStore.skillNeedPoints, err = db.SkillNeedPoints(); return })
 	g.Go(func() (err error) { dataStore.skillRarities, err = db.SkillRarities(); return })
+	g.Go(func() (err error) { dataStore.teamTrialPool, err = db.TeamTrialPool(); return })
+	g.Go(func() (err error) { dataStore.raceConditions, err = db.RaceConditions(); return })
+	g.Go(func() (err error) { dataStore.generalSkills, err = db.GeneralSkills(); return })
+	g.Go(func() (err error) { dataStore.scoreRules, err = db.ScoreRules(); return })
 	if err := g.Wait(); err != nil {
 		return &dataStore, fmt.Errorf("load db data: %w", err)
 	}
@@ -107,6 +120,29 @@ func (dataStore *DataStore) SkillNames(ids []int) []string {
 		result = append(result, dataStore.skillNames[id])
 	}
 	return result
+}
+
+// TeamTrialPool returns the races from which team trials draw. The caller must not change them.
+func (dataStore *DataStore) TeamTrialPool() []db.TeamTrialRace {
+	return dataStore.teamTrialPool
+}
+
+// RaceConditions returns the combinations of season, weather and ground condition that races draw.
+// The caller must not change them.
+func (dataStore *DataStore) RaceConditions() []db.RaceCondition {
+	return dataStore.raceConditions
+}
+
+// GeneralSkills returns the skills that any uma can learn with skill points. The caller must not
+// change them.
+func (dataStore *DataStore) GeneralSkills() []db.GeneralSkill {
+	return dataStore.generalSkills
+}
+
+// ScoreRules returns the base scores of a team trial race and the conditions that earn them. The
+// caller must not change them.
+func (dataStore *DataStore) ScoreRules() []db.ScoreRule {
+	return dataStore.scoreRules
 }
 
 // FactorNames returns the name of each factor ID

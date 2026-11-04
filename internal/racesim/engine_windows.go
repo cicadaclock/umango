@@ -12,17 +12,45 @@ import (
 
 const (
 	// Interface version of the engine library that this package calls
-	interfaceVersion = 3
+	interfaceVersion = 5
 	// Longest failure text that this package reads from the library
 	errorTextCapacity = 1024
 )
 
-// Engine is the race engine library with its game data loaded. It is not safe for concurrent use.
+// Engine is the race engine library with its game data loaded. Different prepared races may run
+// concurrently, but one prepared race is not safe for concurrent use. A failure reported during
+// concurrent runs may carry the text of the other run's failure.
 type Engine struct {
 	// Game data that the library holds
 	data uintptr
 
-	prepare, release, run, releaseSkillSpans, lastError *syscall.LazyProc
+	prepare, release, run, releaseSkillSpans, possibleSkills, runSkillTrial, lastError *syscall.LazyProc
+}
+
+// skillTrialRequest is a SkillTrial in the layout of the library's SkillTrial
+type skillTrialRequest struct {
+	runner                      uintptr
+	courseSetId, raceInstanceId int32
+	skillIds, replacedSkillIds  *int32
+	skillCount                  uintptr
+	variations                  *RaceVariation
+	variationCount              uintptr
+	scoreRules                  *ScoreRules
+}
+
+// request returns the trial in the layout of the library
+func (t *SkillTrial) request() skillTrialRequest {
+	return skillTrialRequest{
+		runner:           uintptr(t.Runner),
+		courseSetId:      t.CourseSetId,
+		raceInstanceId:   t.RaceInstanceId,
+		skillIds:         unsafe.SliceData(t.SkillIds),
+		replacedSkillIds: unsafe.SliceData(t.ReplacedSkillIds),
+		skillCount:       uintptr(len(t.SkillIds)),
+		variations:       unsafe.SliceData(t.Variations),
+		variationCount:   uintptr(len(t.Variations)),
+		scoreRules:       t.Rules,
+	}
 }
 
 // trialOutput is what the library stores for one run, in the layout of its TrialOutput
@@ -49,9 +77,13 @@ func Open(files Files) (*Engine, error) {
 		release:           library.NewProc("racesim_release"),
 		run:               library.NewProc("racesim_run"),
 		releaseSkillSpans: library.NewProc("racesim_release_skill_spans"),
+		possibleSkills:    library.NewProc("racesim_possible_skills"),
+		runSkillTrial:     library.NewProc("racesim_run_skill_trial"),
 		lastError:         library.NewProc("racesim_last_error"),
 	}
-	procs := [...]*syscall.LazyProc{version, open, e.prepare, e.release, e.run, e.releaseSkillSpans, e.lastError}
+	procs := [...]*syscall.LazyProc{
+		version, open, e.prepare, e.release, e.run, e.releaseSkillSpans, e.possibleSkills, e.runSkillTrial, e.lastError,
+	}
 	for _, proc := range procs {
 		if err := proc.Find(); err != nil {
 			return nil, fmt.Errorf("race engine library has no function %s: %w", proc.Name, err)
@@ -114,4 +146,46 @@ func (e *Engine) Run(race PreparedRace, seeds []int32, outcomes []RunnerOutcome)
 	}
 	defer e.releaseSkillSpans.Call(uintptr(unsafe.Pointer(output.skillSpans)), output.skillSpanCount)
 	return slices.Clone(unsafe.Slice(output.skillSpans, output.skillSpanCount)), nil
+}
+
+// PossibleSkills sets each element of possible, which holds one element per skill of the trial, to
+// 1 when that skill can activate for the runner on the trial's course under any of the trial's
+// variations, otherwise 0. Skills count as unable to activate only when a fixed fact of the race
+// rules them out, such as the course, the ground or the running style.
+func (e *Engine) PossibleSkills(race PreparedRace, trial *SkillTrial, possible []uint8) error {
+	request := trial.request()
+	status, _, _ := e.possibleSkills.Call(
+		e.data,
+		uintptr(race),
+		uintptr(unsafe.Pointer(&request)),
+		uintptr(unsafe.Pointer(unsafe.SliceData(possible))),
+	)
+	if status != 0 {
+		return fmt.Errorf("find possible skills: %w", e.lastFailure())
+	}
+	return nil
+}
+
+// RunSkillTrial simulates the trial on all processor threads but one. It stores the runner's
+// baseline for each variation, and for each skill and variation what the skill changed against the
+// same race with the skill muted. The outcomes of skill k occupy the elements from
+// k * len(trial.Variations) in variation order.
+func (e *Engine) RunSkillTrial(
+	race PreparedRace,
+	trial *SkillTrial,
+	baselines []BaselineOutcome,
+	outcomes []SkillPairOutcome,
+) error {
+	request := trial.request()
+	status, _, _ := e.runSkillTrial.Call(
+		e.data,
+		uintptr(race),
+		uintptr(unsafe.Pointer(&request)),
+		uintptr(unsafe.Pointer(unsafe.SliceData(baselines))),
+		uintptr(unsafe.Pointer(unsafe.SliceData(outcomes))),
+	)
+	if status != 0 {
+		return fmt.Errorf("run skill trial: %w", e.lastFailure())
+	}
+	return nil
 }

@@ -31,3 +31,13 @@ func (*Engine) Release(PreparedRace) {}
 func (*Engine) Run(PreparedRace, []int32, []RunnerOutcome) ([]SkillSpan, error) {
 	return nil, errUnsupported
 }
+
+// PossibleSkills reports that this platform cannot load the engine library
+func (*Engine) PossibleSkills(PreparedRace, *SkillTrial, []uint8) error {
+	return errUnsupported
+}
+
+// RunSkillTrial reports that this platform cannot load the engine library
+func (*Engine) RunSkillTrial(PreparedRace, *SkillTrial, []BaselineOutcome, []SkillPairOutcome) error {
+	return errUnsupported
+}

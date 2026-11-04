@@ -37,6 +37,23 @@ func DistanceTypeIter() iter.Seq[DistanceType] {
 	}
 }
 
+// TeamTrialCategory returns the category of a team trial race on a course of a distance in meters
+// and a race_course_set ground. Every dirt course of the pool is a Dirt race, whatever its distance.
+func TeamTrialCategory(distance, ground int) DistanceType {
+	const groundDirt = 2
+	switch {
+	case ground == groundDirt:
+		return Dirt
+	case distance <= 1400:
+		return Sprint
+	case distance <= 1800:
+		return Mile
+	case distance <= 2400:
+		return Medium
+	}
+	return Long
+}
+
 // RunStyleIter yields each running style in display order
 func RunStyleIter() iter.Seq[RunStyle] {
 	runStyles := []RunStyle{Front, Pace, Late, End}

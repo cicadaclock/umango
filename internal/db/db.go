@@ -107,6 +107,92 @@ func (db *DB) RaceInstanceDistances() (map[int]int, error) {
 	return result, nil
 }
 
+// TeamTrialRace is one race of the team trial pool
+type TeamTrialRace struct {
+	RaceInstanceId, CourseSetId, Distance, Ground int
+}
+
+// RaceCondition is one combination of season, weather and ground condition that a race can draw
+type RaceCondition struct {
+	Season, Weather, GroundCondition int
+	// Weight of this combination among all rows of race_condition
+	Rate int
+}
+
+// GeneralSkill is one skill that any uma can learn with skill points
+type GeneralSkill struct {
+	Id int
+	// Tiers of one skill share a group
+	GroupId int
+	// Tier within the group, counted from 1 for the lowest tier
+	Tier int
+}
+
+// ScoreRule is one row of team_stadium_raw_score: a base score and the condition that earns it
+type ScoreRule struct {
+	ConditionType, Value1, Value2, Score int
+}
+
+// TeamTrialPool returns the races from which team trials draw, ordered by track and distance.
+// master.mdb does not mark this pool. Race group 9 holds three instances of each course, and saved
+// team trial results only ever use the third, whose ID is a multiple of 3.
+func (db *DB) TeamTrialPool() ([]TeamTrialRace, error) {
+	result, err := queryRows(db.SqlDB, `SELECT ri.id, rcs.id, rcs.distance, rcs.ground
+		FROM race AS r
+		JOIN race_instance AS ri ON ri.race_id = r.id
+		JOIN race_course_set AS rcs ON rcs.id = r.course_set
+		WHERE r."group" = 9 AND ri.id % 3 = 0
+		ORDER BY rcs.race_track_id, rcs.distance, rcs.id`,
+		func(rows *sql.Rows, r *TeamTrialRace) error {
+			return rows.Scan(&r.RaceInstanceId, &r.CourseSetId, &r.Distance, &r.Ground)
+		})
+	if err != nil {
+		return nil, fmt.Errorf("team trial pool: %w", err)
+	}
+	return result, nil
+}
+
+// RaceConditions returns the combinations of season, weather and ground condition that races draw
+func (db *DB) RaceConditions() ([]RaceCondition, error) {
+	result, err := queryRows(db.SqlDB, "SELECT t.season, t.weather, t.ground, t.rate FROM race_condition AS t WHERE t.rate > 0",
+		func(rows *sql.Rows, c *RaceCondition) error {
+			return rows.Scan(&c.Season, &c.Weather, &c.GroundCondition, &c.Rate)
+		})
+	if err != nil {
+		return nil, fmt.Errorf("race_condition: %w", err)
+	}
+	return result, nil
+}
+
+// GeneralSkills returns the skills that any uma can learn with skill points: those with a cost and
+// an ID in the general range, without uniques, inherited uniques or negative conditions
+func (db *DB) GeneralSkills() ([]GeneralSkill, error) {
+	result, err := queryRows(db.SqlDB, `SELECT s.id, s.group_id, s.group_rate FROM skill_data AS s
+		JOIN single_mode_skill_need_point AS n ON n.id = s.id
+		WHERE s.id / 100000 = 2 AND s.group_rate > 0
+		ORDER BY s.id`,
+		func(rows *sql.Rows, s *GeneralSkill) error {
+			return rows.Scan(&s.Id, &s.GroupId, &s.Tier)
+		})
+	if err != nil {
+		return nil, fmt.Errorf("general skills: %w", err)
+	}
+	return result, nil
+}
+
+// ScoreRules returns the base scores of a team trial race and the conditions that earn them
+func (db *DB) ScoreRules() ([]ScoreRule, error) {
+	result, err := queryRows(db.SqlDB, `SELECT t.condition_type, t.condition_value_1, t.condition_value_2, t.score
+		FROM team_stadium_raw_score AS t`,
+		func(rows *sql.Rows, r *ScoreRule) error {
+			return rows.Scan(&r.ConditionType, &r.Value1, &r.Value2, &r.Score)
+		})
+	if err != nil {
+		return nil, fmt.Errorf("team_stadium_raw_score rules: %w", err)
+	}
+	return result, nil
+}
+
 // SkillNeedPoints returns the skill point cost of each skill ID, before any hint discount
 func (db *DB) SkillNeedPoints() (map[int]int, error) {
 	result, err := queryMap[int](db.SqlDB, "SELECT t.id, t.need_skill_point FROM single_mode_skill_need_point AS t")
@@ -186,6 +272,25 @@ func (db *DB) textData(category, minIndex, maxIndex int, between bool) (map[int]
 		}
 	}
 	return queryMap[string](db.SqlDB, query)
+}
+
+// queryRows runs a query and returns one value per row, each filled by scan
+func queryRows[T any](sqlDB *sql.DB, query string, scan func(rows *sql.Rows, value *T) error) ([]T, error) {
+	rows, err := sqlDB.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("query rows: %w", err)
+	}
+	defer rows.Close()
+
+	var result []T
+	for rows.Next() {
+		var value T
+		if err := scan(rows, &value); err != nil {
+			return nil, fmt.Errorf("scanning rows: %w", err)
+		}
+		result = append(result, value)
+	}
+	return result, rows.Err()
 }
 
 // queryMap runs a query of two columns and returns the second column keyed by the first

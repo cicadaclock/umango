@@ -9,6 +9,7 @@ import (
 	"log"
 	"math/rand/v2"
 	"slices"
+	"sync"
 
 	"gioui.org/layout"
 	"gioui.org/op"
@@ -38,6 +39,28 @@ const (
 // simulatorDetail states what the values of the placement table are
 var simulatorDetail = fmt.Sprintf("Average of %d simulated races", racesPerTrial)
 
+// engineHolder opens the race engine at its first use, so that the engine costs nothing at
+// application startup, and shares it between the pages that simulate races
+type engineHolder struct {
+	mutex  sync.Mutex
+	engine *racesim.Engine
+}
+
+// open returns the race engine, opening it when no earlier call succeeded
+func (h *engineHolder) open(files racesim.Files) (*racesim.Engine, error) {
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
+	if h.engine != nil {
+		return h.engine, nil
+	}
+	engine, err := racesim.Open(files)
+	if err != nil {
+		return nil, err
+	}
+	h.engine = engine
+	return engine, nil
+}
+
 // simulation carries the result of a background simulation to the window goroutine
 type simulation struct {
 	// Cell text of the placement table, one slice per column
@@ -55,6 +78,7 @@ type simulation struct {
 // races: the first trial from the race's seed, then from a random seed at each new trial
 type simulatorPage struct {
 	dataStore                              *data.DataStore
+	engines                                *engineHolder
 	panel                                  panel
 	importButton, trialButton, checkButton widget.Clickable
 	table                                  tableView
@@ -89,9 +113,10 @@ type simulatorPage struct {
 }
 
 // newSimulatorPage returns a simulator page that has checked for the engine files
-func newSimulatorPage(dataStore *data.DataStore) *simulatorPage {
+func newSimulatorPage(dataStore *data.DataStore, engines *engineHolder) *simulatorPage {
 	p := &simulatorPage{
 		dataStore: dataStore,
+		engines:   engines,
 		panel:     panel{title: simulatorPanelTitle},
 		results:   make(chan simulation, 1),
 		table:     newPlacementTable(),
@@ -187,8 +212,7 @@ func (p *simulatorPage) runTrial(invalidate func()) {
 	p.results <- p.simulate(rand.Int32())
 }
 
-// importRace prepares the field and course of a race file and simulates a trial from the race's seed.
-// The engine starts at the first import, so that it costs nothing at application startup.
+// importRace prepares the field and course of a race file and simulates a trial from the race's seed
 func (p *simulatorPage) importRace(source io.Reader) simulation {
 	savedRace, err := io.ReadAll(source)
 	if err != nil {
@@ -198,11 +222,9 @@ func (p *simulatorPage) importRace(source io.Reader) simulation {
 	if err != nil {
 		return simulation{err: err}
 	}
-	if p.engine == nil {
-		p.engine, err = racesim.Open(p.files)
-		if err != nil {
-			return simulation{err: err}
-		}
+	p.engine, err = p.engines.open(p.files)
+	if err != nil {
+		return simulation{err: err}
 	}
 	prepared, err := p.engine.Prepare(savedRace)
 	if err != nil {
