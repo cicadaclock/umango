@@ -15,7 +15,7 @@ use uma_race_sim::sim::race::{self, DT, Race};
 use uma_race_sim::sim::{skill, tick};
 
 /// Version of this interface, checked by the application when it loads the library.
-const INTERFACE_VERSION: u32 = 5;
+const INTERFACE_VERSION: u32 = 6;
 
 /// HP that runs out within this many meters of the goal does not count as running out short of the goal.
 const HP_OUT_GOAL_MARGIN: f32 = 0.1;
@@ -40,6 +40,12 @@ const LAST_TARGET_TIME_BRACKET: i32 = 20;
 const RARITY_NORMAL: i32 = 1;
 const RARITY_RARE: i32 = 2;
 const RARITY_FIRST_UNIQUE: i32 = 3;
+
+/// Set in an activation flag when the skill activated.
+const FIRED_SKILL: u8 = 1;
+
+/// Set in an activation flag when the lower tier that the skill would replace activated.
+const FIRED_REPLACED_TIER: u8 = 2;
 
 /// Text of the last failure, read through `racesim_last_error`.
 static LAST_ERROR: Mutex<String> = Mutex::new(String::new());
@@ -158,6 +164,7 @@ pub struct SkillTrial {
     runner: usize,
     course_set_id: i32,
     race_instance_id: i32,
+    /// In ascending order.
     skill_ids: *const i32,
     /// For each skill, the lower tier that the runner owns and the skill would replace, otherwise 0.
     replaced_skill_ids: *const i32,
@@ -165,6 +172,11 @@ pub struct SkillTrial {
     variations: *const RaceVariation,
     variation_count: usize,
     score_rules: *const ScoreRules,
+    /// One per variation, written by `racesim_watch_skills` and read by `racesim_run_skill_trial`.
+    baselines: *mut BaselineOutcome,
+    /// Activation flags, `skill_count` per variation, written by `racesim_watch_skills` and read by
+    /// `racesim_run_skill_trial`.
+    activations: *mut u8,
 }
 
 /// What the runner under test did in one race with no added skill. The application holds the same layout.
@@ -177,25 +189,14 @@ pub struct BaselineOutcome {
     finish_order: i32,
 }
 
-/// What one added skill changed in one race, against the same race with that skill muted. The application holds the
-/// same layout.
+/// What one added skill changed in one race, against the baseline of that race. The application holds the same layout.
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
-pub struct SkillPairOutcome {
-    /// 1 when the skill activated, otherwise 0.
-    activated: i32,
+pub struct SkillOutcome {
     /// 1 when the skill won the race, -1 when it lost a won race, otherwise 0.
     win_delta: i32,
     /// Change of the team trial score before bonuses.
     score_delta: i32,
-}
-
-/// What the runner under test did in one simulated race.
-struct RunnerSample {
-    score: i32,
-    finish_order: i32,
-    /// Whether each watched skill activated.
-    activated: [bool; 2],
 }
 
 /// Returns the text of a panic.
@@ -384,23 +385,71 @@ pub unsafe extern "C" fn racesim_possible_skills(
     })
 }
 
-/// Simulates the baseline of each variation and, for each skill of the trial and each variation, the race with that
-/// skill muted and, when the skill or the tier that it replaces activated, the same race with the skill's effects. A
-/// race in which neither activated is the same either way, so it is not repeated. The outcomes of skill `k` occupy the
-/// elements from `k * variation_count` in variation order. Leaves one processor thread free for the window. Returns 0
-/// on success. One caller at a time may use the race. The data is read only.
+/// Simulates one race per variation with every skill of the trial silently watching, which is the baseline race bit for
+/// bit, and stores the baseline of each variation and which skills activated. Leaves one processor thread free for the
+/// window. Returns 0 on success. One caller at a time may use the race. The data is read only.
 ///
 /// # Safety
 /// `data` must come from `racesim_open` and `race` from `racesim_prepare_saved_race`. The arrays of `trial` must be
-/// readable for their counts. `baselines` must be writable for `variation_count` elements and `outcomes` for
-/// `skill_count * variation_count` elements. `score_rules` of `trial` must be readable.
+/// readable or writable for their counts, and `score_rules` readable.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn racesim_watch_skills(data: *const GameData, race: *const RaceInput, trial: *const SkillTrial) -> i32 {
+    guarded(1, || {
+        let (data, base, trial) = unsafe { (&*data, &*race, &*trial) };
+        let rules = unsafe { &*trial.score_rules };
+        let (skill_count, variation_count) = (trial.skill_count, trial.variation_count);
+        let skills = unsafe { std::slice::from_raw_parts(trial.skill_ids, skill_count) };
+        let replaced = unsafe { std::slice::from_raw_parts(trial.replaced_skill_ids, skill_count) };
+        let variations = unsafe { std::slice::from_raw_parts(trial.variations, variation_count) };
+        let baselines = unsafe { std::slice::from_raw_parts_mut(trial.baselines, variation_count) };
+        let activations = unsafe { std::slice::from_raw_parts_mut(trial.activations, skill_count * variation_count) };
+        // A trial without skills has no activation rows and still has baselines
+        let rows = activations.chunks_mut(skill_count.max(1)).chain(std::iter::repeat_with(|| &mut [][..]));
+        let races: Vec<_> = variations.iter().map(|variation| varied_race(base, trial, variation)).collect();
+        for_each_on_threads(
+            races.into_iter().zip(baselines).zip(rows),
+            || (),
+            |_, (((mut input, gate), baseline), row)| {
+                let horse = &mut input.horses[gate];
+                horse.skills.extend(skills.iter().map(|&skill_id| SkillInput { skill_id, level: 1 }));
+                horse.muted_skills = skills.to_vec();
+                horse.observed_skills = skills.to_vec();
+                let (race, positioning_score) = simulate_to_finish(&input, data, gate, rules);
+                row.fill(0);
+                for span in race.recorder.skill_spans.iter().filter(|span| span.horse == gate) {
+                    if let Ok(k) = skills.binary_search(&span.skill_id) {
+                        row[k] |= FIRED_SKILL;
+                    }
+                    for (flag, _) in row.iter_mut().zip(replaced).filter(|(_, tier)| **tier == span.skill_id) {
+                        *flag |= FIRED_REPLACED_TIER;
+                    }
+                }
+                *baseline = BaselineOutcome {
+                    score: positioning_score + race_score(&race, &input, gate, rules),
+                    finish_order: race.recorder.results[gate].finish_order,
+                };
+            },
+        )?;
+        Ok(0)
+    })
+}
+
+/// For each skill of the trial and each variation stored by `racesim_watch_skills` in which the skill or the tier that
+/// it replaces activated, simulates the race with that skill in effect and stores what it changed against the baseline.
+/// A race in which neither activated is the baseline race, so it is not repeated and stores no change. The outcomes of
+/// skill `k` occupy the elements from `k * variation_count` in variation order. Leaves one processor thread free for
+/// the window. Returns 0 on success. One caller at a time may use the race. The data is read only.
+///
+/// # Safety
+/// `data` must come from `racesim_open` and `race` from `racesim_prepare_saved_race`. The arrays of `trial` must be
+/// readable for their counts and `score_rules` readable. `outcomes` must be writable for
+/// `skill_count * variation_count` elements.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn racesim_run_skill_trial(
     data: *const GameData,
     race: *const RaceInput,
     trial: *const SkillTrial,
-    baselines: *mut BaselineOutcome,
-    outcomes: *mut SkillPairOutcome,
+    outcomes: *mut SkillOutcome,
 ) -> i32 {
     guarded(1, || {
         let (data, base, trial) = unsafe { (&*data, &*race, &*trial) };
@@ -409,23 +458,19 @@ pub unsafe extern "C" fn racesim_run_skill_trial(
         let skills = unsafe { std::slice::from_raw_parts(trial.skill_ids, skill_count) };
         let replaced = unsafe { std::slice::from_raw_parts(trial.replaced_skill_ids, skill_count) };
         let variations = unsafe { std::slice::from_raw_parts(trial.variations, variation_count) };
-        let baselines = unsafe { std::slice::from_raw_parts_mut(baselines, variation_count) };
+        let baselines = unsafe { std::slice::from_raw_parts(trial.baselines, variation_count) };
+        let activations = unsafe { std::slice::from_raw_parts(trial.activations, skill_count * variation_count) };
         let outcomes = unsafe { std::slice::from_raw_parts_mut(outcomes, skill_count * variation_count) };
         let races: Vec<_> = variations.iter().map(|variation| varied_race(base, trial, variation)).collect();
         for_each_on_threads(
-            baselines.iter_mut().zip(&races),
-            || (),
-            |_, (baseline, (input, gate))| {
-                let sample = sample_race(input, data, *gate, [0, 0], rules);
-                *baseline = BaselineOutcome { score: sample.score, finish_order: sample.finish_order };
-            },
-        )?;
-        for_each_on_threads(
-            outcomes.chunks_mut(variation_count).zip(skills.iter().zip(replaced)),
+            outcomes.iter_mut().enumerate(),
             || races.clone(),
-            |races, (outcomes, (&skill_id, &replaced_id))| {
-                for (outcome, (input, gate)) in outcomes.iter_mut().zip(races) {
-                    *outcome = run_skill_pair(input, *gate, data, [skill_id, replaced_id], rules);
+            |races, (position, outcome)| {
+                let (skill, variation) = (position / variation_count, position % variation_count);
+                *outcome = SkillOutcome::default();
+                if activations[variation * skill_count + skill] != 0 {
+                    let (input, gate) = &mut races[variation];
+                    *outcome = run_skill_race(input, *gate, data, [skills[skill], replaced[skill]], &baselines[variation], rules);
                 }
             },
         )?;
@@ -455,33 +500,38 @@ fn varied_race(base: &RaceInput, trial: &SkillTrial, variation: &RaceVariation) 
     (input, gate.expect("every variation holds the runner under test at a gate"))
 }
 
-/// Adds a skill to the runner at `gate`, simulates the pair of races and removes the skill again. The ids are the skill
-/// and the tier that it replaces, or 0. The skill's muted and real races share one generator sequence up to the first
-/// effect, so the difference measures that skill alone. An upgrade mutes the tier that it replaces in the real race,
-/// because the game holds only one tier of a skill.
-fn run_skill_pair(input: &mut RaceInput, gate: usize, data: &GameData, ids: [i32; 2], rules: &ScoreRules) -> SkillPairOutcome {
-    let [skill_id, replaced_id] = ids;
+/// Adds a skill to the runner at `gate` in effect, simulates the race, removes the skill again and returns what it
+/// changed. The ids are the skill and the tier that it replaces, or 0. The skill draws from its own generator, so the
+/// race is the baseline race up to its first effect and the difference measures that skill alone. An upgrade mutes the
+/// tier that it replaces, because the game holds only one tier of a skill.
+fn run_skill_race(
+    input: &mut RaceInput,
+    gate: usize,
+    data: &GameData,
+    [skill_id, replaced_id]: [i32; 2],
+    baseline: &BaselineOutcome,
+    rules: &ScoreRules,
+) -> SkillOutcome {
     let horse = &mut input.horses[gate];
     horse.skills.push(SkillInput { skill_id, level: 1 });
-    horse.muted_skills.push(skill_id);
-    let muted = sample_race(input, data, gate, ids, rules);
-    let mut outcome = SkillPairOutcome { activated: muted.activated[0] as i32, ..Default::default() };
-    if muted.activated[0] || muted.activated[1] {
-        let horse = &mut input.horses[gate];
-        horse.muted_skills.clear();
-        horse.muted_skills.push(replaced_id);
-        let real = sample_race(input, data, gate, [0, 0], rules);
-        outcome.win_delta = (real.finish_order == 0) as i32 - (muted.finish_order == 0) as i32;
-        outcome.score_delta = real.score - muted.score;
-    }
+    horse.observed_skills.push(skill_id);
+    horse.muted_skills.push(replaced_id);
+    let (race, positioning_score) = simulate_to_finish(input, data, gate, rules);
+    let (score, finish_order) = (positioning_score + race_score(&race, input, gate, rules), race.recorder.results[gate].finish_order);
+    drop(race);
     let horse = &mut input.horses[gate];
     horse.skills.pop();
+    horse.observed_skills.clear();
     horse.muted_skills.clear();
-    outcome
+    SkillOutcome {
+        win_delta: (finish_order == 0) as i32 - (baseline.finish_order == 0) as i32,
+        score_delta: score - baseline.score,
+    }
 }
 
-/// Simulates one race and returns what the runner at `gate` did and whether each watched skill activated.
-fn sample_race(input: &RaceInput, data: &GameData, gate: usize, watched: [i32; 2], rules: &ScoreRules) -> RunnerSample {
+/// Simulates one race and returns the finished race with the score of the runner at `gate` for being ahead going into
+/// each phase.
+fn simulate_to_finish<'a>(input: &'a RaceInput, data: &'a GameData, gate: usize, rules: &ScoreRules) -> (Race<'a>, i32) {
     let mut race = race::init(input, data);
     tick::start(&mut race);
     let (mut phases_entered, mut positioning_score) = (0, 0);
@@ -500,12 +550,7 @@ fn sample_race(input: &RaceInput, data: &GameData, gate: usize, watched: [i32; 2
         }
     }
     tick::finish(&mut race);
-    let activated = |skill_id| race.recorder.skill_spans.iter().any(|span| span.horse == gate && span.skill_id == skill_id);
-    RunnerSample {
-        score: positioning_score + race_score(&race, input, gate, rules),
-        finish_order: race.recorder.results[gate].finish_order,
-        activated: watched.map(activated),
-    }
+    (race, positioning_score)
 }
 
 /// Returns whether the runner at `gate` is ahead of all other runners of its running style.

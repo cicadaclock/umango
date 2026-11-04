@@ -12,7 +12,7 @@ import (
 
 const (
 	// Interface version of the engine library that this package calls
-	interfaceVersion = 5
+	interfaceVersion = 6
 	// Longest failure text that this package reads from the library
 	errorTextCapacity = 1024
 )
@@ -24,7 +24,7 @@ type Engine struct {
 	// Game data that the library holds
 	data uintptr
 
-	prepare, release, run, releaseSkillSpans, possibleSkills, runSkillTrial, lastError *syscall.LazyProc
+	prepare, release, run, releaseSkillSpans, possibleSkills, watchSkills, runSkillTrial, lastError *syscall.LazyProc
 }
 
 // skillTrialRequest is a SkillTrial in the layout of the library's SkillTrial
@@ -36,6 +36,8 @@ type skillTrialRequest struct {
 	variations                  *RaceVariation
 	variationCount              uintptr
 	scoreRules                  *ScoreRules
+	baselines                   *BaselineOutcome
+	activations                 *uint8
 }
 
 // request returns the trial in the layout of the library
@@ -50,6 +52,8 @@ func (t *SkillTrial) request() skillTrialRequest {
 		variations:       unsafe.SliceData(t.Variations),
 		variationCount:   uintptr(len(t.Variations)),
 		scoreRules:       t.Rules,
+		baselines:        unsafe.SliceData(t.Baselines),
+		activations:      unsafe.SliceData(t.Activations),
 	}
 }
 
@@ -78,11 +82,13 @@ func Open(files Files) (*Engine, error) {
 		run:               library.NewProc("racesim_run"),
 		releaseSkillSpans: library.NewProc("racesim_release_skill_spans"),
 		possibleSkills:    library.NewProc("racesim_possible_skills"),
+		watchSkills:       library.NewProc("racesim_watch_skills"),
 		runSkillTrial:     library.NewProc("racesim_run_skill_trial"),
 		lastError:         library.NewProc("racesim_last_error"),
 	}
 	procs := [...]*syscall.LazyProc{
-		version, open, e.prepare, e.release, e.run, e.releaseSkillSpans, e.possibleSkills, e.runSkillTrial, e.lastError,
+		version, open, e.prepare, e.release, e.run, e.releaseSkillSpans, e.possibleSkills, e.watchSkills, e.runSkillTrial,
+		e.lastError,
 	}
 	for _, proc := range procs {
 		if err := proc.Find(); err != nil {
@@ -166,22 +172,28 @@ func (e *Engine) PossibleSkills(race PreparedRace, trial *SkillTrial, possible [
 	return nil
 }
 
-// RunSkillTrial simulates the trial on all processor threads but one. It stores the runner's
-// baseline for each variation, and for each skill and variation what the skill changed against the
-// same race with the skill muted. The outcomes of skill k occupy the elements from
-// k * len(trial.Variations) in variation order.
-func (e *Engine) RunSkillTrial(
-	race PreparedRace,
-	trial *SkillTrial,
-	baselines []BaselineOutcome,
-	outcomes []SkillPairOutcome,
-) error {
+// WatchSkills simulates one race per variation with every skill of the trial silently watching, on
+// all processor threads but one. It stores the runner's baseline for each variation and which skills
+// activated, in trial.Baselines and trial.Activations.
+func (e *Engine) WatchSkills(race PreparedRace, trial *SkillTrial) error {
+	request := trial.request()
+	status, _, _ := e.watchSkills.Call(e.data, uintptr(race), uintptr(unsafe.Pointer(&request)))
+	if status != 0 {
+		return fmt.Errorf("watch skills: %w", e.lastFailure())
+	}
+	return nil
+}
+
+// RunSkillTrial simulates each skill of the trial in effect on the variations where
+// trial.Activations shows that it activated, on all processor threads but one, and stores what it
+// changed against trial.Baselines. The other variations store no change. The outcomes of skill k
+// occupy the elements from k * len(trial.Variations) in variation order.
+func (e *Engine) RunSkillTrial(race PreparedRace, trial *SkillTrial, outcomes []SkillOutcome) error {
 	request := trial.request()
 	status, _, _ := e.runSkillTrial.Call(
 		e.data,
 		uintptr(race),
 		uintptr(unsafe.Pointer(&request)),
-		uintptr(unsafe.Pointer(unsafe.SliceData(baselines))),
 		uintptr(unsafe.Pointer(unsafe.SliceData(outcomes))),
 	)
 	if status != 0 {
