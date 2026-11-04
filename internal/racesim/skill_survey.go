@@ -325,7 +325,8 @@ func RunSkillSurvey(config *SkillSurveyConfig, stop *atomic.Bool, report func(Sk
 
 // candidateSkills returns the skills that a runner could still learn. A skill counts when the
 // runner owns no tier of it at the same level or above. Each skill comes with the lower tier that
-// it would replace, otherwise 0.
+// it would replace, otherwise 0. A double circle skill does not count, because it earns the same
+// activation score as its single circle form at a higher cost.
 func candidateSkills(skills []db.GeneralSkill, owned []int) (skillIds, replacedIds []int32) {
 	ownedTiers := make(map[int]db.GeneralSkill, len(owned))
 	for i := range skills {
@@ -338,7 +339,7 @@ func candidateSkills(skills []db.GeneralSkill, owned []int) (skillIds, replacedI
 	replacedIds = make([]int32, 0, len(skills))
 	for i := range skills {
 		held, ok := ownedTiers[skills[i].GroupId]
-		if skills[i].Id == excludedSkillId || (ok && held.Tier >= skills[i].Tier) {
+		if skills[i].Id == excludedSkillId || skills[i].DoubleCircle || (ok && held.Tier >= skills[i].Tier) {
 			continue
 		}
 		skillIds = append(skillIds, int32(skills[i].Id))

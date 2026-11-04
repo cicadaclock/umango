@@ -126,6 +126,8 @@ type GeneralSkill struct {
 	GroupId int
 	// Tier within the group, counted from 1 for the lowest tier
 	Tier int
+	// A white skill above the lowest tier, whose group also holds its single circle form
+	DoubleCircle bool
 }
 
 // ScoreRule is one row of team_stadium_raw_score: a base score and the condition that earns it
@@ -167,12 +169,13 @@ func (db *DB) RaceConditions() ([]RaceCondition, error) {
 // GeneralSkills returns the skills that any uma can learn with skill points: those with a cost and
 // an ID in the general range, without uniques, inherited uniques or negative conditions
 func (db *DB) GeneralSkills() ([]GeneralSkill, error) {
-	result, err := queryRows(db.SqlDB, `SELECT s.id, s.group_id, s.group_rate FROM skill_data AS s
+	result, err := queryRows(db.SqlDB, `SELECT s.id, s.group_id, s.group_rate, s.rarity = 1 AND s.group_rate > 1
+		FROM skill_data AS s
 		JOIN single_mode_skill_need_point AS n ON n.id = s.id
 		WHERE s.id / 100000 = 2 AND s.group_rate > 0
 		ORDER BY s.id`,
 		func(rows *sql.Rows, s *GeneralSkill) error {
-			return rows.Scan(&s.Id, &s.GroupId, &s.Tier)
+			return rows.Scan(&s.Id, &s.GroupId, &s.Tier, &s.DoubleCircle)
 		})
 	if err != nil {
 		return nil, fmt.Errorf("general skills: %w", err)
